@@ -67,15 +67,23 @@ function(opendaq_setup_boost)
         set(BOOST_CONTEXT_ARCHITECTURE ${CONTEXT_ARCHITECTURE} CACHE STRING "Boost.Context architecture (arm, arm64, loongarch64, mips32, mips64, ppc32, ppc64, riscv64, s390x, i386, x86_64, combined)")
     endif()
 
-    if (NOT BOOST_INCLUDE_LIBRARIES)
-        get_property(NEEDED_LIBRARIES GLOBAL PROPERTY BOOST_REQUIRED_LIBS)
-        list(REMOVE_DUPLICATES NEEDED_LIBRARIES)
+    get_property(REQUIRED_LIBS GLOBAL PROPERTY BOOST_REQUIRED_LIBS)
 
-        set(BOOST_INCLUDE_LIBRARIES "${NEEDED_LIBRARIES}"
-            CACHE STRING
-            "List of libraries to build (default: all but excluded and incompatible)"
-        )
+    if (NOT BOOST_INCLUDE_LIBRARIES)
+        # initialize
+        set(NEEDED_LIBRARIES "${REQUIRED_LIBS}")
+    else()
+        # append to existing value
+        set(NEEDED_LIBRARIES "${BOOST_INCLUDE_LIBRARIES};${REQUIRED_LIBS}")
     endif()
+
+    list(REMOVE_DUPLICATES NEEDED_LIBRARIES)
+
+    set(BOOST_INCLUDE_LIBRARIES "${NEEDED_LIBRARIES}"
+        CACHE STRING
+        "List of Boost libraries to build"
+        FORCE
+    )
 
     opendaq_dependency(
         NAME                Boost
