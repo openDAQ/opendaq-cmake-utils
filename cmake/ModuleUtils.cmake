@@ -39,7 +39,7 @@ macro(setup_module_subfolders REPO_OPTION_PREFIX)
         add_subdirectory(examples)
     endif()
     add_subdirectory(docs)
-endmacro(setup_module_subfloders)
+endmacro(setup_module_subfolders)
 
 macro(setup_module_boost REPO_OPTION_PREFIX)
     if (NOT ${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE)
