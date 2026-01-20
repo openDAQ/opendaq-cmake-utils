@@ -3,8 +3,9 @@ function(opendaq_add_required_boost_libs)
         message(FATAL_ERROR "opendaq_add_required_boost_libs() called with no input list of libraries")
     endif()
 
-    foreach(lib IN LISTS ARGN)
-        set_property(GLOBAL APPEND PROPERTY BOOST_REQUIRED_LIBS ${lib})
+    foreach(LIB_ENTRY IN LISTS ARGN)
+        set_property(GLOBAL APPEND PROPERTY BOOST_REQUIRED_LIBS ${LIB_ENTRY})
+        message(STATUS "Append boost ${LIB_ENTRY} to required libraries")
     endforeach()
 endfunction(opendaq_add_required_boost_libs)
 
@@ -15,6 +16,7 @@ function(opendaq_add_required_boost_headers)
 
     foreach(hdr IN LISTS ARGN)
         set_property(GLOBAL APPEND PROPERTY BOOST_REQUIRED_HEADERS ${hdr})
+        message(STATUS "Append boost ${hdr} to required headers")
     endforeach()
 endfunction(opendaq_add_required_boost_headers)
 
@@ -67,17 +69,13 @@ function(opendaq_setup_boost)
         set(BOOST_CONTEXT_ARCHITECTURE ${CONTEXT_ARCHITECTURE} CACHE STRING "Boost.Context architecture (arm, arm64, loongarch64, mips32, mips64, ppc32, ppc64, riscv64, s390x, i386, x86_64, combined)")
     endif()
 
-    get_property(REQUIRED_LIBS GLOBAL PROPERTY BOOST_REQUIRED_LIBS)
-
-    if (NOT BOOST_INCLUDE_LIBRARIES)
-        # initialize
-        set(NEEDED_LIBRARIES "${REQUIRED_LIBS}")
-    else()
-        # append to existing value
-        set(NEEDED_LIBRARIES "${BOOST_INCLUDE_LIBRARIES};${REQUIRED_LIBS}")
-    endif()
+    get_property(NEEDED_LIBRARIES GLOBAL PROPERTY BOOST_REQUIRED_LIBS)
 
     list(REMOVE_DUPLICATES NEEDED_LIBRARIES)
+
+    foreach(NEEDED_LIB IN LISTS NEEDED_LIBRARIES)
+        message(STATUS "Set boost ${NEEDED_LIB} library")
+    endforeach()
 
     set(BOOST_INCLUDE_LIBRARIES "${NEEDED_LIBRARIES}"
         CACHE STRING
@@ -87,7 +85,7 @@ function(opendaq_setup_boost)
 
     opendaq_dependency(
         NAME                Boost
-        REQUIRED_VERSION    1.71.0
+        REQUIRED_VERSION    1.82.0
         URL                 https://github.com/boostorg/boost/releases/download/boost-1.82.0/boost-1.82.0.tar.xz
         URL_HASH            SHA256=fd60da30be908eff945735ac7d4d9addc7f7725b1ff6fcdcaede5262d511d21e
         EXPECT_TARGET       Boost::headers
