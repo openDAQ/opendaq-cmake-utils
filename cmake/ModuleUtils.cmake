@@ -1,10 +1,10 @@
-macro(try_add_subdirectory DIR)
+macro(opendaq_try_add_subdirectory DIR)
     if(IS_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/${DIR}" AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/${DIR}/CMakeLists.txt")
         add_subdirectory("${DIR}")
     endif()
-endmacro(try_add_subdirectory)
+endmacro(opendaq_try_add_subdirectory)
 
-macro(setup_module_project REPO_OPTION_PREFIX REPO_NAME)
+macro(opendaq_setup_module_project REPO_OPTION_PREFIX REPO_NAME)
     setup_repo_version("${REPO_OPTION_PREFIX}" ${REPO_NAME} "module_version")
 
     if(NOT DEFINED ${REPO_OPTION_PREFIX}_VERSION)
@@ -18,9 +18,9 @@ macro(setup_module_project REPO_OPTION_PREFIX REPO_NAME)
 
     project(${REPO_NAME} VERSION ${${REPO_OPTION_PREFIX}_VERSION} LANGUAGES CXX)
 
-    setup_build_mode(${REPO_OPTION_PREFIX} ${REPO_NAME})
+    opendaq_setup_build_mode(${REPO_OPTION_PREFIX} ${REPO_NAME})
     if(NOT ${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE)
-        setup_repo(${REPO_OPTION_PREFIX})
+        opendaq_setup_repo(${REPO_OPTION_PREFIX})
     endif()
 
     if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cmake/ModuleOptions.cmake")
@@ -38,23 +38,23 @@ macro(setup_module_project REPO_OPTION_PREFIX REPO_NAME)
     if (NOT DEFINED OPENDAQ_SDK_TARGET_NAMESPACE)
         set(OPENDAQ_SDK_TARGET_NAMESPACE daq)
     endif()
-endmacro(setup_module_project)
+endmacro(opendaq_setup_module_project)
 
-macro(setup_module_subfolders REPO_OPTION_PREFIX)
+macro(opendaq_setup_module_subfolders REPO_OPTION_PREFIX)
     add_subdirectory(external)
-    try_add_subdirectory(shared)
+    opendaq_try_add_subdirectory(shared)
     add_subdirectory(modules)
 
     if (${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE AND OPENDAQ_ENABLE_TESTS OR ${REPO_OPTION_PREFIX}_ENABLE_TESTS)
-        try_add_subdirectory(tests)
+        opendaq_try_add_subdirectory(tests)
     endif()
     if (${REPO_OPTION_PREFIX}_ENABLE_EXAMPLE_APP)
-        try_add_subdirectory(examples)
+        opendaq_try_add_subdirectory(examples)
     endif()
-    try_add_subdirectory(docs)
-endmacro(setup_module_subfolders)
+    opendaq_try_add_subdirectory(docs)
+endmacro(opendaq_setup_module_subfolders)
 
-macro(setup_module_default_dependencies REPO_OPTION_PREFIX)
+macro(opendaq_setup_module_default_dependencies REPO_OPTION_PREFIX)
     if (NOT ${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE)
         set(OPENDAQ_REF "main")
 
@@ -67,10 +67,10 @@ macro(setup_module_default_dependencies REPO_OPTION_PREFIX)
             endif()
         endif()
 
-        resolve_opendaq_dependency("${OPENDAQ_REF}")
+        opendaq_resolve_sdk_dependency("${OPENDAQ_REF}")
     endif()
 
-    suppress_ext_lib_warnings()
+    opendaq_suppress_ext_lib_warnings()
 
     if (NOT ${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE AND ${REPO_OPTION_PREFIX}_ENABLE_TESTS)
         if (NOT TARGET gtest)
@@ -83,7 +83,7 @@ macro(setup_module_default_dependencies REPO_OPTION_PREFIX)
                 message(STATUS "Fetching GTest version ${GTest_REQUIREDVERSION}")
 
                 include(FetchContent)
-                get_custom_fetch_content_params(GTest FC_PARAMS)
+                opendaq_get_custom_fetch_content_params(GTest FC_PARAMS)
 
                 set(GTest_WITH_POST_BUILD_UNITTEST OFF)
                 set(GTest_WITH_TESTS OFF)
@@ -106,5 +106,21 @@ macro(setup_module_default_dependencies REPO_OPTION_PREFIX)
         include(Boost.cmake)
         opendaq_setup_boost()
     endif()
-endmacro(setup_module_default_dependencies)
+endmacro(opendaq_setup_module_default_dependencies)
 
+macro(opendaq_resolve_sdk_dependency VERSION)
+    include(FetchContent)
+    find_package(openDAQ ${OPENDAQ_SDK_VERSION} GLOBAL)
+    if (NOT openDAQ_FOUND)
+        set(OPENDAQ_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+
+        FetchContent_Declare(
+            openDAQ
+            GIT_REPOSITORY https://github.com/openDAQ/openDAQ.git
+            GIT_TAG ${VERSION}
+            GIT_PROGRESS   ON
+            SOURCE_DIR ${FETCHCONTENT_EXTERNALS_DIR}/src/openDAQ
+        )
+        FetchContent_MakeAvailable(openDAQ)
+    endif()
+endmacro()

@@ -87,7 +87,7 @@ macro(opendaq_dependency)
     string(TOLOWER "${OPENDAQ_DEP_NAME}" OPENDAQ_DEP_NAME_LOWER)
     string(TOUPPER "${OPENDAQ_DEP_NAME}" OPENDAQ_DEP_NAME_UPPER)
 
-    set_cmake_folder_context(TARGET_FOLDER_NAME)
+    opendaq_set_cmake_folder_context(TARGET_FOLDER_NAME)
 
     # define an option for the user to specify if the dependency should always be
     # fetched; use OPENDAQ_ALWAYS_FETCH_DEPENDENCIES as the option's default value
@@ -149,7 +149,7 @@ macro(opendaq_dependency)
 
         message(STATUS "Fetching ${OPENDAQ_DEP_NAME} ${OPENDAQ_DEP_GIT_REF}...")
 
-        get_custom_fetch_content_params(${OPENDAQ_DEP_NAME} FC_PARAMS)
+        opendaq_get_custom_fetch_content_params(${OPENDAQ_DEP_NAME} FC_PARAMS)
 
         # add a patch command if any patches specified
         set(PATCH_PARAMS)
@@ -242,7 +242,7 @@ macro(opendaq_dependency)
 
 endmacro()
 
-function(get_custom_fetch_content_params LIBRARY_NAME OUTPARAM)
+function(opendaq_get_custom_fetch_content_params LIBRARY_NAME OUTPARAM)
     set(FC_SOURCE_DIR ${FETCHCONTENT_EXTERNALS_DIR}/src)
     set(FC_SUBBUILD_DIR ${FETCHCONTENT_EXTERNALS_DIR}/subbuild/${CMAKE_GENERATOR}/${CMAKE_CXX_COMPILER_ID})
 
@@ -258,20 +258,3 @@ function(get_custom_fetch_content_params LIBRARY_NAME OUTPARAM)
         PARENT_SCOPE
     )
 endfunction()
-
-macro(resolve_opendaq_dependency VERSION)
-    include(FetchContent)
-    find_package(openDAQ ${OPENDAQ_SDK_VERSION} GLOBAL)
-    if (NOT openDAQ_FOUND)
-        set(OPENDAQ_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-
-        FetchContent_Declare(
-            openDAQ
-            GIT_REPOSITORY https://github.com/openDAQ/openDAQ.git
-            GIT_TAG ${VERSION}
-            GIT_PROGRESS   ON
-            SOURCE_DIR ${FETCHCONTENT_EXTERNALS_DIR}/src/openDAQ
-        )
-        FetchContent_MakeAvailable(openDAQ)
-    endif()
-endmacro()

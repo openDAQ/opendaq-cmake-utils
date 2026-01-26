@@ -73,12 +73,12 @@ function(opendaq_prepend_path PATH FILES)
   set(${FILES} ${MODIFIED} PARENT_SCOPE)
 endfunction()
 
-function(get_current_folder_name OUTFOLDER)
+function(opendaq_get_current_folder_name OUTFOLDER)
     get_filename_component(FOLDER ${CMAKE_CURRENT_SOURCE_DIR} NAME)
     set(${OUTFOLDER} ${FOLDER} PARENT_SCOPE)
 endfunction()
 
-function(set_cmake_folder_context OUTFOLDER)
+function(opendaq_set_cmake_folder_context OUTFOLDER)
     get_current_folder_name(TARGET_FOLDER_NAME)
 
     if (ARGC GREATER 1)
@@ -96,7 +96,7 @@ function(set_cmake_folder_context OUTFOLDER)
     set(${OUTFOLDER} ${TARGET_FOLDER_NAME} PARENT_SCOPE)
 endfunction()
 
-function(prepend_include SUBFOLDER SOURCE_FILES)
+function(opendaq_prepend_include SUBFOLDER SOURCE_FILES)
     list(TRANSFORM ${SOURCE_FILES} PREPEND "../include/${SUBFOLDER}/")
     set( ${SOURCE_FILES} ${${SOURCE_FILES}} PARENT_SCOPE )
 endfunction()
