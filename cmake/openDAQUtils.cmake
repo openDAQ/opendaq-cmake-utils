@@ -78,7 +78,7 @@ function(opendaq_get_current_folder_name OUTFOLDER)
     set(${OUTFOLDER} ${FOLDER} PARENT_SCOPE)
 endfunction()
 
-function(opendaq_set_cmake_folder_context OUTFOLDER)
+function(set_cmake_folder_context OUTFOLDER)
     get_current_folder_name(TARGET_FOLDER_NAME)
 
     if (ARGC GREATER 1)
