@@ -5,7 +5,7 @@ macro(opendaq_try_add_subdirectory DIR)
 endmacro(opendaq_try_add_subdirectory)
 
 macro(opendaq_setup_module_project REPO_OPTION_PREFIX REPO_NAME)
-    setup_repo_version("${REPO_OPTION_PREFIX}" ${REPO_NAME} "module_version")
+    opendaq_setup_repo_version("${REPO_OPTION_PREFIX}" ${REPO_NAME} "module_version")
 
     if(NOT DEFINED ${REPO_OPTION_PREFIX}_VERSION)
         if(DEFINED OPENDAQ_PACKAGE_VERSION)
