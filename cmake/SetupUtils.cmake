@@ -28,7 +28,7 @@ macro(opendaq_setup_32bit_build_linux_system_flags REPO_OPTION_PREFIX)
             set(CMAKE_SYSTEM_PROCESSOR i386 CACHE STRING "" FORCE)
         endif()
     endif()
-endmacro(opendaq_setup_32bit_build_system_flags)
+endmacro(opendaq_setup_32bit_build_linux_system_flags)
 
 
 macro(opendaq_setup_build_mode REPO_OPTION_PREFIX REPO_NAME)
