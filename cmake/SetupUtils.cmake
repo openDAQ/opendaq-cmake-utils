@@ -10,6 +10,27 @@ macro(opendaq_setup_repo_version VAR_PREFIX REPO_NAME VERSION_FILE)
     endif()
 endmacro(opendaq_setup_repo_version)
 
+
+macro(opendaq_setup_32bit_build_linux_system_flags REPO_OPTION_PREFIX)
+    if(${REPO_OPTION_PREFIX}_FORCE_COMPILE_32BIT AND CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+        set(CMAKE_C_FLAGS_INIT "${CMAKE_C_FLAGS_INIT} -m32" CACHE STRING "" FORCE)
+        set(CMAKE_CXX_FLAGS_INIT "${CMAKE_CXX_FLAGS_INIT} -m32" CACHE STRING "" FORCE)
+        set(CMAKE_ASM_FLAGS_INIT "${CMAKE_ASM_FLAGS_INIT} -m32" CACHE STRING "" FORCE)
+
+        # Help CMake find 32-bit libraries
+        list(APPEND CMAKE_LIBRARY_PATH /usr/lib/i386-linux-gnu)
+
+        if(NOT CMAKE_SYSTEM_NAME)
+            set(CMAKE_SYSTEM_NAME Linux CACHE STRING "" FORCE)
+        endif()
+
+        if(NOT CMAKE_SYSTEM_PROCESSOR)
+            set(CMAKE_SYSTEM_PROCESSOR i386 CACHE STRING "" FORCE)
+        endif()
+    endif()
+endmacro(opendaq_setup_32bit_build_system_flags)
+
+
 macro(opendaq_setup_build_mode REPO_OPTION_PREFIX REPO_NAME)
     list(APPEND CMAKE_MESSAGE_CONTEXT ${REPO_NAME})
     set(CMAKE_MESSAGE_CONTEXT_SHOW ON CACHE BOOL "Show CMake message context")
@@ -181,7 +202,6 @@ macro(opendaq_setup_repo REPO_OPTION_PREFIX)
         set(BUILD_ARM On CACHE INTERNAL "Build for ARM architecture")
     endif()
 
-    # FIXME start
     set(BUILD_64Bit Off)
 
     if("${CMAKE_SIZEOF_VOID_P}" EQUAL 8)
@@ -198,7 +218,6 @@ macro(opendaq_setup_repo REPO_OPTION_PREFIX)
     else()
         message(STATUS "Position independent code flag is not set")
     endif()
-    # FIXME end
 
     if(NOT CMAKE_DEBUG_POSTFIX AND NOT ${REPO_OPTION_PREFIX}_DISABLE_DEBUG_POSTFIX)
       set(CMAKE_DEBUG_POSTFIX -debug)
@@ -225,7 +244,14 @@ macro(opendaq_setup_repo REPO_OPTION_PREFIX)
         if(${REPO_OPTION_PREFIX}_FORCE_COMPILE_32BIT)
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
             set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32")
+            set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -m32")
             set(BUILD_64Bit OFF)
+
+            # Linux GCC 32-bit specific flags
+            if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_COMPILER_IS_GNUCXX)
+                set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -ffloat-store")
+                set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+            endif()
         endif()
 
         # The flag -fuse-ld=lld is needed on MinGW where the default linker is hardly usable.

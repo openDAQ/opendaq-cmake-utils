@@ -45,7 +45,7 @@ macro(opendaq_setup_module_subfolders REPO_OPTION_PREFIX)
     opendaq_try_add_subdirectory(shared)
     add_subdirectory(modules)
 
-    if (${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE AND OPENDAQ_ENABLE_TESTS OR ${REPO_OPTION_PREFIX}_ENABLE_TESTS)
+    if (OPENDAQ_ENABLE_TESTS AND ${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE OR ${REPO_OPTION_PREFIX}_ENABLE_TESTS AND NOT ${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE)
         opendaq_try_add_subdirectory(tests)
     endif()
     if (${REPO_OPTION_PREFIX}_ENABLE_EXAMPLE_APP)
