@@ -97,7 +97,7 @@ function(set_cmake_folder_context OUTFOLDER)
     set(${OUTFOLDER} ${TARGET_FOLDER_NAME} PARENT_SCOPE)
 endfunction()
 
-function(opendaq_prepend_include SUBFOLDER SOURCE_FILES)
+function(prepend_include SUBFOLDER SOURCE_FILES)
     list(TRANSFORM ${SOURCE_FILES} PREPEND "../include/${SUBFOLDER}/")
     set( ${SOURCE_FILES} ${${SOURCE_FILES}} PARENT_SCOPE )
 endfunction()
