@@ -412,7 +412,7 @@ macro(opendaq_setup_repo REPO_OPTION_PREFIX)
 
     add_compile_definitions(BOOST_ALL_NO_LIB=1)
 
-    use_compiler_cache()
+    opendaq_use_compiler_cache()
 
     if (WIN32)
         add_compile_definitions(WIN32_LEAN_AND_MEAN)

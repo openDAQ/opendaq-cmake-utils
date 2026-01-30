@@ -87,7 +87,7 @@ macro(opendaq_dependency)
     string(TOLOWER "${OPENDAQ_DEP_NAME}" OPENDAQ_DEP_NAME_LOWER)
     string(TOUPPER "${OPENDAQ_DEP_NAME}" OPENDAQ_DEP_NAME_UPPER)
 
-    set_cmake_folder_context(TARGET_FOLDER_NAME)
+    opendaq_set_cmake_folder_context(TARGET_FOLDER_NAME)
 
     # define an option for the user to specify if the dependency should always be
     # fetched; use OPENDAQ_ALWAYS_FETCH_DEPENDENCIES as the option's default value

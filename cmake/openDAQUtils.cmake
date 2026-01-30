@@ -79,7 +79,7 @@ function(opendaq_get_current_folder_name OUTFOLDER)
     set(${OUTFOLDER} ${FOLDER} PARENT_SCOPE)
 endfunction()
 
-function(set_cmake_folder_context OUTFOLDER)
+function(opendaq_set_cmake_folder_context OUTFOLDER)
     opendaq_get_current_folder_name(TARGET_FOLDER_NAME)
 
     if (ARGC GREATER 1)
@@ -97,12 +97,12 @@ function(set_cmake_folder_context OUTFOLDER)
     set(${OUTFOLDER} ${TARGET_FOLDER_NAME} PARENT_SCOPE)
 endfunction()
 
-function(prepend_include SUBFOLDER SOURCE_FILES)
+function(opendaq_prepend_include SUBFOLDER SOURCE_FILES)
     list(TRANSFORM ${SOURCE_FILES} PREPEND "../include/${SUBFOLDER}/")
     set( ${SOURCE_FILES} ${${SOURCE_FILES}} PARENT_SCOPE )
 endfunction()
 
-function(opendaq_create_version_header LIB_NAME OUTPUT_DIR HEADER_PREFIX GENERATE_RC GENERATE_HEADER)
+function(opendaq_generate_version_header LIB_NAME OUTPUT_DIR HEADER_PREFIX GENERATE_RC GENERATE_HEADER)
     set(TEMPLATE_DIR ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/version)
 
     if (GENERATE_HEADER)
@@ -137,7 +137,7 @@ function(opendaq_create_version_header LIB_NAME OUTPUT_DIR HEADER_PREFIX GENERAT
     target_sources(${LIB_NAME} PRIVATE ${VERSION_HEADER} ${VERSION_RC})
 endfunction()
 
-function(create_version_header LIB_NAME)
+function(opendaq_create_version_header LIB_NAME)
     set(INCLUDE_FOLDER_NAME ${TARGET_FOLDER_NAME})
 
     set(options ONLY_RC NO_RC)
@@ -174,7 +174,7 @@ function(create_version_header LIB_NAME)
 
     set(LIB_HEADERS_DIR ../include/${INCLUDE_FOLDER_NAME})
 
-    opendaq_create_version_header(
+    opendaq_generate_version_header(
         ${LIB_NAME}
         ${CMAKE_CURRENT_BINARY_DIR}/${LIB_HEADERS_DIR}
         "${HEADER_NAME_PREFIX}"
@@ -183,7 +183,7 @@ function(create_version_header LIB_NAME)
     )
 endfunction()
 
-function(use_compiler_cache)
+function(opendaq_use_compiler_cache)
     if((NOT CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR) OR (NOT OPENDAQ_USE_CCACHE))
         return()
     endif()
