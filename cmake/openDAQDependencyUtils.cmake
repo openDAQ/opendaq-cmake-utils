@@ -1,4 +1,5 @@
-set(opendaq_dependency__internal_dir ${CMAKE_CURRENT_LIST_DIR} CACHE INTERNAL "")
+# save path to patch.cmake location
+set(opendaq_dependency_patch_script_dir ${CMAKE_CURRENT_LIST_DIR} CACHE INTERNAL "")
 
 #
 # opendaq_check_dependency(
@@ -160,7 +161,7 @@ macro(opendaq_dependency)
                     -DPATCHES=${PATCHES}
                     -DREQUIRED_VERSION=${OPENDAQ_DEP_FETCH_VERSION}
                     -DGIT_EXECUTABLE=${GIT_EXECUTABLE}
-                    -P ${opendaq_dependency__internal_dir}/patch.cmake
+                    -P ${opendaq_dependency_patch_script_dir}/patch.cmake
                     ${PATCH_FILES})
         endif()
 
@@ -241,20 +242,3 @@ macro(opendaq_dependency)
     endif()
 
 endmacro()
-
-function(opendaq_get_custom_fetch_content_params LIBRARY_NAME OUTPARAM)
-    set(FC_SOURCE_DIR ${FETCHCONTENT_EXTERNALS_DIR}/src)
-    set(FC_SUBBUILD_DIR ${FETCHCONTENT_EXTERNALS_DIR}/subbuild/${CMAKE_GENERATOR}/${CMAKE_CXX_COMPILER_ID})
-
-    if (CMAKE_GENERATOR_PLATFORM)
-        set(FC_SUBBUILD_DIR ${FC_SUBBUILD_DIR}/${CMAKE_GENERATOR_PLATFORM})
-    endif()
-
-    set(${OUTPARAM}
-        DOWNLOAD_DIR ${FC_SOURCE_DIR}
-        SOURCE_DIR ${FC_SOURCE_DIR}/${LIBRARY_NAME}
-        SUBBUILD_DIR ${FC_SUBBUILD_DIR}/${LIBRARY_NAME}
-        #EXCLUDE_FROM_ALL ON
-        PARENT_SCOPE
-    )
-endfunction()

@@ -5,10 +5,10 @@
 # - output file: data.h
 # - variable name declared in output file: DATA
 # - data length: sizeof(DATA)
-# embed_resource("data.dat" "data.h" "DATA")
+# opendaq_embed_resource("data.dat" "data.h" "DATA")
 ####################################################################################################
 
-function(embed_resource resource_file_name source_file_name variable_name)
+function(opendaq_embed_resource resource_file_name source_file_name variable_name)
 
     if(EXISTS "${source_file_name}")
         if("${source_file_name}" IS_NEWER_THAN "${resource_file_name}")
@@ -31,4 +31,24 @@ function(embed_resource resource_file_name source_file_name variable_name)
 
     file(WRITE "${source_file_name}" "${source}")
 
+endfunction()
+
+function(opendaq_read_file_contents FILE_PATH OUT_FILE_CONTENTS)
+    if (NOT EXISTS "${FILE_PATH}")
+        message(FATAL_ERROR "Cannot read file contents: file ${FILE_PATH} not found")
+    endif()
+
+    file(READ "${FILE_PATH}" _FILE_CONTENTS)
+    string(STRIP "${_FILE_CONTENTS}" _FILE_CONTENTS)
+
+    if (_FILE_CONTENTS STREQUAL "")
+        message(WARNING "File is empty: ${FILE_PATH}")
+    endif()
+
+    set(${OUT_FILE_CONTENTS} "${_FILE_CONTENTS}" PARENT_SCOPE)
+endfunction()
+
+function(opendaq_get_version_major_minor_patch VERSION_STRING OUT_VERSION_MAJOR_MINOR_PATCH)
+    string(REGEX REPLACE "^([0-9]+\\.[0-9]+\\.[0-9]+).*" "\\1" _VERSION_MAJOR_MINOR_PATCH "${VERSION_STRING}")
+    set(${OUT_VERSION_MAJOR_MINOR_PATCH} "${_VERSION_MAJOR_MINOR_PATCH}" PARENT_SCOPE)
 endfunction()

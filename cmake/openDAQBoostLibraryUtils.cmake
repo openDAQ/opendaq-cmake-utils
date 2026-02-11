@@ -7,7 +7,7 @@ function(opendaq_add_required_boost_libs)
         set_property(GLOBAL APPEND PROPERTY BOOST_REQUIRED_LIBS ${LIB_ENTRY})
         message(STATUS "Append boost ${LIB_ENTRY} to required libraries")
     endforeach()
-endfunction(opendaq_add_required_boost_libs)
+endfunction()
 
 function(opendaq_add_required_boost_headers)
     if(NOT ARGN)
@@ -18,9 +18,9 @@ function(opendaq_add_required_boost_headers)
         set_property(GLOBAL APPEND PROPERTY BOOST_REQUIRED_HEADERS ${hdr})
         message(STATUS "Append boost ${hdr} to required headers")
     endforeach()
-endfunction(opendaq_add_required_boost_headers)
+endfunction()
 
-function(opendaq_setup_boost)
+function(opendaq_complete_boost_dependency)
     # fallback to defaults if options are not defined e.g. when building with installed opendaq
     if (NOT DEFINED OPENDAQ_LINK_3RD_PARTY_LIBS_STATICALY)
         set(OPENDAQ_LINK_3RD_PARTY_LIBS_STATICALY ON)
@@ -83,6 +83,7 @@ function(opendaq_setup_boost)
         FORCE
     )
 
+    # TODO create cmake cache variable with version
     opendaq_dependency(
         NAME                Boost
         REQUIRED_VERSION    1.82.0
@@ -132,4 +133,4 @@ function(opendaq_setup_boost)
             endif()
         endforeach()
     endif()
-endfunction(opendaq_setup_boost)
+endfunction()
