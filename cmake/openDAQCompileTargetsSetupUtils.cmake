@@ -88,7 +88,7 @@ endmacro()
 macro(opendaq_setup_msvc_compiler_flags REPO_OPTION_PREFIX)
     if (NOT CMAKE_COMPILER_IS_CLANGXX)
         # As above CMAKE_CXX_STANDARD but for VS
-        add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/std:c++17>)
+        add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/std:c++20>)
 
         foreach (flag IN ITEMS
                 # Set source and execution character sets to UTF-8
@@ -320,7 +320,7 @@ macro(opendaq_common_compile_targets_settings)
         set(CMAKE_DEBUG_POSTFIX -debug)
     endif()
 
-    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD 20)
 
     if (WIN32)
         set(MIN_WINDOWS_VERSION 0x0601)
