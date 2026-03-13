@@ -6,6 +6,7 @@ set(OPENDAQ_SDK_TARGET_NAMESPACE "daq" CACHE INTERNAL "openDAQ SDK namespace")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(openDAQBaseUtils)
+include(openDAQModernCMakeUtils)
 include(openDAQEarlySetupUtils)
 include(openDAQCompileTargetsSetupUtils)
 include(openDAQBuildOptionsUtils)

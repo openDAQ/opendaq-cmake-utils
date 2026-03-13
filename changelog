@@ -1,2 +1,5 @@
+## v1.0.1
+ - Add target-based CMake enforcement by overriding directory-scoped commands (include_directories, add_definitions, link_directories)
+
 ## v1.0.0
  - Initial tag
