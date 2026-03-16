@@ -63,6 +63,7 @@ endmacro()
 # Can be safely called before `project()`
 macro(opendaq_common_early_setup)
     opendaq_setup_common_cmake_policies()
+    opendaq_set_cmake_mode(MODERN)
     set(CMAKE_MESSAGE_CONTEXT_SHOW ON CACHE BOOL "Show CMake message context")
 
     # In-source build is not supported for SDK nor modules
