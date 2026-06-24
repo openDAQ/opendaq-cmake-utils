@@ -86,8 +86,13 @@ function(opendaq_generate_package_name)
         message(FATAL_ERROR "opendaq_generate_package_name() requires VERSION")
     endif()
 
+    # Name resolution: explicit NAME arg > OPENDAQ_PACKAGE_NAME_OVERRIDE (a cache var the
+    # reusable injects per job, so one repo can produce several named stagings -- core,
+    # c-bindings, wrappers -- from one CMakeLists) > lowercase PROJECT_NAME.
     if(DEFINED ARG_NAME)
         set(_name "${ARG_NAME}")
+    elseif(DEFINED OPENDAQ_PACKAGE_NAME_OVERRIDE)
+        set(_name "${OPENDAQ_PACKAGE_NAME_OVERRIDE}")
     else()
         string(TOLOWER "${PROJECT_NAME}" _name)
     endif()
