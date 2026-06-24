@@ -106,7 +106,7 @@ function(opendaq_generate_package_name)
 endfunction()
 
 ##
-## Detects the Conan-shaped staging settings (beyond the triplet) for the sidecar.
+## Detects the Conan-shaped staging settings (beyond the triplet) for the staging metadata.
 ## Requires opendaq_detect_triplet() first. Reuses OPENDAQ_TRIPLET_* (no re-detection
 ## of arch/compiler/build_type). Fields that do not apply are left empty -> omitted by
 ## opendaq_write_staging_meta().
@@ -235,10 +235,10 @@ endfunction()
 
 ##
 ## opendaq_write_staging_meta(VERSION <ver> OUTPUT <path>)
-##   Writes the staging sidecar (staging-meta.json). Pure formatting -- no detection,
+##   Writes the staging metadata (staging-meta.json). Pure formatting -- no detection,
 ##   no name composition: reuses OPENDAQ_PACKAGE_NAME / OPENDAQ_PACKAGE_BASENAME from
 ##   opendaq_generate_package_name() and OPENDAQ_SETTINGS_* from opendaq_detect_settings()
-##   (called here if not already). VERSION is the sidecar's `version` field (the semantic
+##   (called here if not already). VERSION is the metadata's `version` field (the semantic
 ##   version, which may differ from the version embedded in the package name, e.g. +sha).
 ##   Empty settings/custom fields are omitted, not emitted.
 ##
@@ -307,13 +307,19 @@ function(opendaq_write_staging_meta)
     string(APPEND _json "\n}\n")
 
     file(WRITE "${ARG_OUTPUT}" "${_json}")
-    message(STATUS "Wrote staging sidecar: ${ARG_OUTPUT}")
+    message(STATUS "Wrote staging metadata: ${ARG_OUTPUT}")
+
+    # Co-locate the staging metadata next to each cpack package (tarball / installer)
+    # in CPACK_PACKAGE_DIRECTORY, via a post-build hook run by cpack.
+    set(CPACK_OPENDAQ_STAGING_META_FILE "${ARG_OUTPUT}" PARENT_SCOPE)
+    list(APPEND CPACK_POST_BUILD_SCRIPTS "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/opendaq_copy_staging_meta.cmake")
+    set(CPACK_POST_BUILD_SCRIPTS "${CPACK_POST_BUILD_SCRIPTS}" PARENT_SCOPE)
 endfunction()
 
 ##
-## opendaq_setup_packaging(VERSION <v> [NAME <n>] [SIDECAR <path>] [GENERATOR <g>] [NO_CPACK])
+## opendaq_setup_packaging(VERSION <v> [NAME <n>] [STAGING_META <path>] [GENERATOR <g>] [NO_CPACK])
 ##   One-call packaging setup: detect triplet, compose package name, write the staging
-##   sidecar, and set CPACK_PACKAGE_FILE_NAME. Unless NO_CPACK, also set CPACK_GENERATOR
+##   metadata, and set CPACK_PACKAGE_FILE_NAME. Unless NO_CPACK, also set CPACK_GENERATOR
 ##   (default TGZ) and call include(CPack).
 ##
 ##   A MACRO (not a function), so all variables land in the CALLER scope -- with NO_CPACK
@@ -325,13 +331,13 @@ endfunction()
 ##                           # ... set(CPACK_GENERATOR ...) / CPACK_NSIS_* / ... ; include(CPack)
 ##
 macro(opendaq_setup_packaging)
-    cmake_parse_arguments(_OSP "NO_CPACK" "VERSION;NAME;SIDECAR;GENERATOR" "" ${ARGN})
+    cmake_parse_arguments(_OSP "NO_CPACK" "VERSION;NAME;STAGING_META;GENERATOR" "" ${ARGN})
 
     if(NOT DEFINED _OSP_VERSION)
         message(FATAL_ERROR "opendaq_setup_packaging() requires VERSION")
     endif()
-    if(NOT DEFINED _OSP_SIDECAR)
-        set(_OSP_SIDECAR "${CMAKE_BINARY_DIR}/staging-meta.json")
+    if(NOT DEFINED _OSP_STAGING_META)
+        set(_OSP_STAGING_META "${CMAKE_BINARY_DIR}/staging-meta.json")
     endif()
     if(NOT DEFINED _OSP_GENERATOR)
         set(_OSP_GENERATOR "TGZ")
@@ -343,7 +349,7 @@ macro(opendaq_setup_packaging)
     else()
         opendaq_generate_package_name(VERSION "${_OSP_VERSION}")
     endif()
-    opendaq_write_staging_meta(VERSION "${_OSP_VERSION}" OUTPUT "${_OSP_SIDECAR}")
+    opendaq_write_staging_meta(VERSION "${_OSP_VERSION}" OUTPUT "${_OSP_STAGING_META}")
 
     set(CPACK_PACKAGE_FILE_NAME "${OPENDAQ_PACKAGE_NAME}")
 
