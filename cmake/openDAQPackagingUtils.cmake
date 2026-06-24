@@ -304,3 +304,46 @@ function(opendaq_write_staging_meta)
     file(WRITE "${ARG_OUTPUT}" "${_json}")
     message(STATUS "Wrote staging sidecar: ${ARG_OUTPUT}")
 endfunction()
+
+##
+## opendaq_setup_packaging(VERSION <v> [NAME <n>] [SIDECAR <path>] [GENERATOR <g>] [NO_CPACK])
+##   One-call packaging setup: detect triplet, compose package name, write the staging
+##   sidecar, and set CPACK_PACKAGE_FILE_NAME. Unless NO_CPACK, also set CPACK_GENERATOR
+##   (default TGZ) and call include(CPack).
+##
+##   A MACRO (not a function), so all variables land in the CALLER scope -- with NO_CPACK
+##   the caller can add its own CPACK_* config and call include(CPack) itself (CPack freezes
+##   the config, so it must be the last step; e.g. core's installer config).
+##
+##   Module (runtime-only):  opendaq_setup_packaging(VERSION ${module_version})
+##   Core (installers):      opendaq_setup_packaging(VERSION ${VER} NAME opendaq NO_CPACK)
+##                           # ... set(CPACK_GENERATOR ...) / CPACK_NSIS_* / ... ; include(CPack)
+##
+macro(opendaq_setup_packaging)
+    cmake_parse_arguments(_OSP "NO_CPACK" "VERSION;NAME;SIDECAR;GENERATOR" "" ${ARGN})
+
+    if(NOT DEFINED _OSP_VERSION)
+        message(FATAL_ERROR "opendaq_setup_packaging() requires VERSION")
+    endif()
+    if(NOT DEFINED _OSP_SIDECAR)
+        set(_OSP_SIDECAR "${CMAKE_BINARY_DIR}/staging-meta.json")
+    endif()
+    if(NOT DEFINED _OSP_GENERATOR)
+        set(_OSP_GENERATOR "TGZ")
+    endif()
+
+    opendaq_detect_triplet()
+    if(DEFINED _OSP_NAME)
+        opendaq_generate_package_name(VERSION "${_OSP_VERSION}" NAME "${_OSP_NAME}")
+    else()
+        opendaq_generate_package_name(VERSION "${_OSP_VERSION}")
+    endif()
+    opendaq_write_staging_meta(VERSION "${_OSP_VERSION}" OUTPUT "${_OSP_SIDECAR}")
+
+    set(CPACK_PACKAGE_FILE_NAME "${OPENDAQ_PACKAGE_NAME}")
+
+    if(NOT _OSP_NO_CPACK)
+        set(CPACK_GENERATOR "${_OSP_GENERATOR}")
+        include(CPack)
+    endif()
+endmacro()
