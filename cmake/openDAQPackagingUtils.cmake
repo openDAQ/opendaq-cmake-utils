@@ -234,7 +234,8 @@ function(opendaq_detect_settings)
 endfunction()
 
 ##
-## opendaq_write_staging_meta(VERSION <ver> OUTPUT <path>)
+## opendaq_write_staging_meta(VERSION <ver> OUTPUT <path>
+##                            [INSTALL_DESTINATION <dir>] [COMPONENTS <c>...])
 ##   Writes the staging metadata (staging-meta.json). Pure formatting -- no detection,
 ##   no name composition: reuses OPENDAQ_PACKAGE_NAME / OPENDAQ_PACKAGE_BASENAME from
 ##   opendaq_generate_package_name() and OPENDAQ_SETTINGS_* from opendaq_detect_settings()
@@ -242,15 +243,29 @@ endfunction()
 ##   version, which may differ from the version embedded in the package name, e.g. +sha).
 ##   Empty settings/custom fields are omitted, not emitted.
 ##
+##   The metadata ships two ways:
+##     - inside every package (cpack packs the install tree, so one install() covers the
+##       tarball and all installers), at INSTALL_DESTINATION (default share/opendaq);
+##     - next to each package in CPACK_PACKAGE_DIRECTORY, so publishing reads it without
+##       unpacking the tarball.
+##
+##   COMPONENTS lists the project's install components. The metadata is installed into
+##   each of them: with component-scoped packaging (CPACK_COMPONENTS_ALL) an untagged
+##   install() lands in "Unspecified" and is silently dropped from the package.
+##
 function(opendaq_write_staging_meta)
-    set(oneValueArgs VERSION OUTPUT)
-    cmake_parse_arguments(ARG "" "${oneValueArgs}" "" ${ARGN})
+    set(oneValueArgs VERSION OUTPUT INSTALL_DESTINATION)
+    set(multiValueArgs COMPONENTS)
+    cmake_parse_arguments(ARG "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT DEFINED ARG_VERSION)
         message(FATAL_ERROR "opendaq_write_staging_meta() requires VERSION")
     endif()
     if(NOT DEFINED ARG_OUTPUT)
         message(FATAL_ERROR "opendaq_write_staging_meta() requires OUTPUT")
+    endif()
+    if(NOT DEFINED ARG_INSTALL_DESTINATION)
+        set(ARG_INSTALL_DESTINATION "share/opendaq")
     endif()
     if(NOT DEFINED OPENDAQ_PACKAGE_NAME)
         message(FATAL_ERROR "opendaq_write_staging_meta(): call opendaq_generate_package_name() first")
@@ -309,6 +324,18 @@ function(opendaq_write_staging_meta)
     file(WRITE "${ARG_OUTPUT}" "${_json}")
     message(STATUS "Wrote staging metadata: ${ARG_OUTPUT}")
 
+    # Ship the staging metadata inside the package: cpack builds every package from the
+    # install tree, so this one install() puts it in the tarball and in each installer.
+    if(ARG_COMPONENTS)
+        foreach(_component IN LISTS ARG_COMPONENTS)
+            install(FILES "${ARG_OUTPUT}"
+                    DESTINATION "${ARG_INSTALL_DESTINATION}"
+                    COMPONENT "${_component}")
+        endforeach()
+    else()
+        install(FILES "${ARG_OUTPUT}" DESTINATION "${ARG_INSTALL_DESTINATION}")
+    endif()
+
     # Co-locate the staging metadata next to each cpack package (tarball / installer)
     # in CPACK_PACKAGE_DIRECTORY, via a post-build hook run by cpack.
     set(CPACK_OPENDAQ_STAGING_META_FILE "${ARG_OUTPUT}" PARENT_SCOPE)
@@ -317,10 +344,15 @@ function(opendaq_write_staging_meta)
 endfunction()
 
 ##
-## opendaq_setup_packaging(VERSION <v> [NAME <n>] [STAGING_META <path>] [GENERATOR <g>] [NO_CPACK])
+## opendaq_setup_packaging(VERSION <v> [NAME <n>] [STAGING_META <path>] [GENERATOR <g>]
+##                         [INSTALL_DESTINATION <dir>] [COMPONENTS <c>...] [NO_CPACK])
 ##   One-call packaging setup: detect triplet, compose package name, write the staging
 ##   metadata, and set CPACK_PACKAGE_FILE_NAME. Unless NO_CPACK, also set CPACK_GENERATOR
 ##   (default TGZ) and call include(CPack).
+##
+##   COMPONENTS / INSTALL_DESTINATION are forwarded to opendaq_write_staging_meta() --
+##   pass the project's install components so the metadata ships inside component-scoped
+##   packages.
 ##
 ##   A MACRO (not a function), so all variables land in the CALLER scope -- with NO_CPACK
 ##   the caller can add its own CPACK_* config and call include(CPack) itself (CPack freezes
@@ -331,7 +363,7 @@ endfunction()
 ##                           # ... set(CPACK_GENERATOR ...) / CPACK_NSIS_* / ... ; include(CPack)
 ##
 macro(opendaq_setup_packaging)
-    cmake_parse_arguments(_OSP "NO_CPACK" "VERSION;NAME;STAGING_META;GENERATOR" "" ${ARGN})
+    cmake_parse_arguments(_OSP "NO_CPACK" "VERSION;NAME;STAGING_META;GENERATOR;INSTALL_DESTINATION" "COMPONENTS" ${ARGN})
 
     if(NOT DEFINED _OSP_VERSION)
         message(FATAL_ERROR "opendaq_setup_packaging() requires VERSION")
@@ -343,13 +375,21 @@ macro(opendaq_setup_packaging)
         set(_OSP_GENERATOR "TGZ")
     endif()
 
+    set(_OSP_META_ARGS "")
+    if(_OSP_COMPONENTS)
+        list(APPEND _OSP_META_ARGS COMPONENTS ${_OSP_COMPONENTS})
+    endif()
+    if(DEFINED _OSP_INSTALL_DESTINATION)
+        list(APPEND _OSP_META_ARGS INSTALL_DESTINATION "${_OSP_INSTALL_DESTINATION}")
+    endif()
+
     opendaq_detect_triplet()
     if(DEFINED _OSP_NAME)
         opendaq_generate_package_name(VERSION "${_OSP_VERSION}" NAME "${_OSP_NAME}")
     else()
         opendaq_generate_package_name(VERSION "${_OSP_VERSION}")
     endif()
-    opendaq_write_staging_meta(VERSION "${_OSP_VERSION}" OUTPUT "${_OSP_STAGING_META}")
+    opendaq_write_staging_meta(VERSION "${_OSP_VERSION}" OUTPUT "${_OSP_STAGING_META}" ${_OSP_META_ARGS})
 
     set(CPACK_PACKAGE_FILE_NAME "${OPENDAQ_PACKAGE_NAME}")
 
