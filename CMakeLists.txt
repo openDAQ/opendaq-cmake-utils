@@ -14,6 +14,7 @@ include(openDAQDependencyUtils)
 include(openDAQResourcesUtils)
 include(openDAQBoostLibraryUtils)
 include(openDAQModuleUtils)
+include(openDAQPackagingUtils)
 
 opendaq_read_file_contents("${CMAKE_CURRENT_LIST_DIR}/version" OPENDAQ_CMAKE_UTILS_VERSION)
 message(STATUS "openDAQ cmake utilities version ${OPENDAQ_CMAKE_UTILS_VERSION}")
