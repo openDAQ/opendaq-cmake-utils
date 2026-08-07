@@ -1,35 +1,74 @@
 ##
-## Triplet detection and package naming for openDAQ projects.
+## Package naming and build metadata for openDAQ projects.
 ##
-## Usage:
-##   include(openDAQPackagingUtils)
-##   opendaq_detect_triplet()
-##   opendaq_generate_package_name(VERSION ${PROJECT_VERSION})
+##   opendaq_detect_settings()             what the build is        settings + custom
+##   opendaq_detect_package()              what is being packaged   name and version
+##   opendaq_compose_package_triplet()     <arch>-<platform>-…      from the settings
+##   opendaq_compose_package_file_name()   <name>-<version>-…       for CPACK_PACKAGE_FILE_NAME
+##   opendaq_write_metadata(OUTPUT <p>)    the JSON
 ##
-## After opendaq_detect_triplet():
-##   OPENDAQ_TRIPLET_ARCH         — x86_64, armv8, x86, armv7
-##   OPENDAQ_TRIPLET_OS           — linux, macos, windows (manylinux_* inside a manylinux container)
-##   OPENDAQ_TRIPLET_COMPILER     — gcc, apple-clang, msvc, clang, intel-cc
-##   OPENDAQ_TRIPLET_COMPILER_VER — major version (MSVC: toolset version)
-##   OPENDAQ_TRIPLET_BUILD_TYPE   — release, debug, relwithdebinfo, minsizerel
-##   OPENDAQ_TRIPLET              — <arch>-<os>-<compiler>-<ver>-<build_type>
+## Detect finds facts, compose derives from them, write serializes. A composed part can be
+## given per argument; what is not given comes from the detected values.
 ##
-## After opendaq_generate_package_name():
-##   OPENDAQ_PACKAGE_NAME         — <project>-<version>-<triplet>
+## The metadata is plain CPACK_OPENDAQ_META_* variables, one per field, the suffix naming the
+## section and the field it becomes. A section is written when any of its fields has a value:
+##
+##   CPACK_OPENDAQ_META_PACKAGE_*    NAME, VERSION, VERSION_SUFFIX, TRIPLET   what this package is
+##   CPACK_OPENDAQ_META_SETTINGS_*   OS, ARCH, COMPILER, …       Conan vocabulary, exactly
+##   CPACK_OPENDAQ_META_CUSTOM_*     PLATFORM, GLIBC             build axes Conan has no words for
+##
+## A project reads or sets any of them directly. CPACK_ is also the only prefix that survives
+## into CPackConfig.cmake, so a cpack run sees them and can name a package of its own
+## (see opendaq_cpack_options.cmake).
 ##
 
-function(opendaq_detect_triplet)
-    # OS (Conan settings.os, lowercase)
-    string(TOLOWER "${CMAKE_SYSTEM_NAME}" _os)
-    if(_os STREQUAL "darwin")
-        set(_os "macos")
-    elseif(_os STREQUAL "linux" AND DEFINED ENV{AUDITWHEEL_POLICY})
-        # manylinux containers export their glibc baseline (e.g. manylinux_2_28),
-        # which distinguishes the binary from a generic "linux" build.
-        set(_os "$ENV{AUDITWHEEL_POLICY}")
+set(CPACK_OPENDAQ_PROJECT_CONFIG "${CMAKE_CURRENT_LIST_DIR}/opendaq_cpack_options.cmake"
+    CACHE INTERNAL "CPack project config naming the package per cpack run")
+set(CPACK_OPENDAQ_UTILS_MODULE "${CMAKE_CURRENT_LIST_FILE}"
+    CACHE INTERNAL "This module, for the CPack project config to include")
+
+##
+## opendaq_detect_settings()
+##   Detects what the build is: the Conan settings, plus the axes Conan cannot express.
+##
+##   Sets (the CPACK_OPENDAQ_META_ prefix is omitted below):
+##     SETTINGS_OS                 — Linux / Macos / Windows (manylinux -> Linux)
+##     SETTINGS_OS_VERSION         — macOS deployment target, else ""
+##     SETTINGS_ARCH               — x86_64 / armv8 / x86 / armv7
+##     SETTINGS_COMPILER           — gcc / apple-clang / msvc / clang / intel-cc
+##     SETTINGS_COMPILER_VERSION   — Conan form (MSVC: MSVC_VERSION/10 = "193")
+##     SETTINGS_COMPILER_TOOLSET   — MSVC: "v143", else ""
+##     SETTINGS_COMPILER_CPPSTD    — "17", or "gnu17" with extensions (non-MSVC)
+##     SETTINGS_COMPILER_LIBCXX    — libstdc++11 / libstdc++ / libc++, "" on Windows
+##     SETTINGS_COMPILER_RUNTIME   — MSVC: dynamic / static, else ""
+##     SETTINGS_BUILD_TYPE         — Release / Debug / RelWithDebInfo / MinSizeRel
+##     CUSTOM_PLATFORM             — linux / manylinux_* / macos / windows
+##     CUSTOM_GLIBC                — Linux compat floor "2.31", else ""
+##
+function(opendaq_detect_settings)
+    # platform: manylinux is not plain linux
+    string(TOLOWER "${CMAKE_SYSTEM_NAME}" _platform)
+    if(_platform STREQUAL "darwin")
+        set(_platform "macos")
+    elseif(_platform STREQUAL "linux" AND DEFINED ENV{AUDITWHEEL_POLICY})
+        set(_platform "$ENV{AUDITWHEEL_POLICY}")
     endif()
 
-    # Architecture (Conan settings.arch)
+    # Conan os (capitalized; manylinux -> Linux)
+    if(_platform STREQUAL "macos")
+        set(_os "Macos")
+    elseif(_platform STREQUAL "windows")
+        set(_os "Windows")
+    else()
+        set(_os "Linux")
+    endif()
+
+    # os.version: macOS deployment target
+    set(_os_version "")
+    if(_os STREQUAL "Macos")
+        set(_os_version "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    endif()
+
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
             set(_arch "armv8")
@@ -44,121 +83,28 @@ function(opendaq_detect_triplet)
         endif()
     endif()
 
-    # Compiler (Conan settings.compiler) and major version
-    if(MSVC)
-        set(_compiler "msvc")
-        set(_compiler_ver "${MSVC_TOOLSET_VERSION}")
-    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        set(_compiler "gcc")
-    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-        set(_compiler "apple-clang")
-    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        set(_compiler "clang")
-    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel" OR CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
-        set(_compiler "intel-cc")
-    else()
-        string(TOLOWER "${CMAKE_CXX_COMPILER_ID}" _compiler)
-    endif()
-    if(NOT MSVC)
-        string(REGEX REPLACE "^([0-9]+).*" "\\1" _compiler_ver "${CMAKE_CXX_COMPILER_VERSION}")
-    endif()
-
-    # Build type (lowercase); multi-config generators default to "release"
-    if(CMAKE_BUILD_TYPE)
-        string(TOLOWER "${CMAKE_BUILD_TYPE}" _build_type)
-    else()
-        set(_build_type "release")
-    endif()
-
-    set(OPENDAQ_TRIPLET_ARCH         "${_arch}"         PARENT_SCOPE)
-    set(OPENDAQ_TRIPLET_OS           "${_os}"           PARENT_SCOPE)
-    set(OPENDAQ_TRIPLET_COMPILER     "${_compiler}"     PARENT_SCOPE)
-    set(OPENDAQ_TRIPLET_COMPILER_VER "${_compiler_ver}" PARENT_SCOPE)
-    set(OPENDAQ_TRIPLET_BUILD_TYPE   "${_build_type}"   PARENT_SCOPE)
-    set(OPENDAQ_TRIPLET "${_arch}-${_os}-${_compiler}-${_compiler_ver}-${_build_type}" PARENT_SCOPE)
-endfunction()
-
-function(opendaq_generate_package_name)
-    set(oneValueArgs VERSION NAME)
-    cmake_parse_arguments(ARG "" "${oneValueArgs}" "" ${ARGN})
-
-    if(NOT DEFINED ARG_VERSION)
-        message(FATAL_ERROR "opendaq_generate_package_name() requires VERSION")
-    endif()
-
-    # Name resolution: explicit NAME arg > OPENDAQ_PACKAGE_NAME_OVERRIDE (a cache var the
-    # reusable injects per job, so one repo can produce several named stagings -- core,
-    # c-bindings, wrappers -- from one CMakeLists) > lowercase PROJECT_NAME.
-    if(DEFINED ARG_NAME)
-        set(_name "${ARG_NAME}")
-    elseif(DEFINED OPENDAQ_PACKAGE_NAME_OVERRIDE)
-        set(_name "${OPENDAQ_PACKAGE_NAME_OVERRIDE}")
-    else()
-        string(TOLOWER "${PROJECT_NAME}" _name)
-    endif()
-
-    if(NOT DEFINED OPENDAQ_TRIPLET)
-        message(FATAL_ERROR "opendaq_generate_package_name(): call opendaq_detect_triplet() first")
-    endif()
-
-    set(OPENDAQ_PACKAGE_BASENAME "${_name}" PARENT_SCOPE)
-    set(OPENDAQ_PACKAGE_NAME "${_name}-${ARG_VERSION}-${OPENDAQ_TRIPLET}" PARENT_SCOPE)
-endfunction()
-
-##
-## Detects the Conan-shaped staging settings (beyond the triplet) for the staging metadata.
-## Requires opendaq_detect_triplet() first. Reuses OPENDAQ_TRIPLET_* (no re-detection
-## of arch/compiler/build_type). Fields that do not apply are left empty -> omitted by
-## opendaq_write_staging_meta().
-##
-## Sets:
-##   OPENDAQ_PLATFORM                   — os-segment (linux / manylinux_* / macos / windows)
-##   OPENDAQ_SETTINGS_OS                — Linux / Macos / Windows (manylinux -> Linux)
-##   OPENDAQ_SETTINGS_OS_VERSION        — macOS deployment target, else ""
-##   OPENDAQ_SETTINGS_ARCH
-##   OPENDAQ_SETTINGS_COMPILER
-##   OPENDAQ_SETTINGS_COMPILER_VERSION  — Conan form (MSVC: MSVC_VERSION/10 = "193")
-##   OPENDAQ_SETTINGS_COMPILER_TOOLSET  — MSVC: "v143", else "" (bridge to the slug's "143")
-##   OPENDAQ_SETTINGS_COMPILER_CPPSTD   — "17", or "gnu17" with extensions (non-MSVC)
-##   OPENDAQ_SETTINGS_COMPILER_LIBCXX   — libstdc++11 / libstdc++ / libc++, "" on MSVC
-##   OPENDAQ_SETTINGS_COMPILER_RUNTIME  — MSVC: dynamic / static, else ""
-##   OPENDAQ_SETTINGS_BUILD_TYPE        — Release / Debug / RelWithDebInfo / MinSizeRel
-##   OPENDAQ_CUSTOM_GLIBC               — Linux compat floor "2.28", else ""
-##
-function(opendaq_detect_settings)
-    if(NOT DEFINED OPENDAQ_TRIPLET)
-        message(FATAL_ERROR "opendaq_detect_settings(): call opendaq_detect_triplet() first")
-    endif()
-
-    # platform = the triplet os-segment as-is (carries the manylinux distinction)
-    set(_platform "${OPENDAQ_TRIPLET_OS}")
-
-    # Conan os (capitalized; manylinux -> Linux)
-    if(OPENDAQ_TRIPLET_OS STREQUAL "macos")
-        set(_os "Macos")
-    elseif(OPENDAQ_TRIPLET_OS STREQUAL "windows")
-        set(_os "Windows")
-    else()
-        set(_os "Linux")   # linux or manylinux_*
-    endif()
-
-    # os.version — macOS deployment target (the macOS compat floor)
-    set(_os_version "")
-    if(_os STREQUAL "Macos")
-        set(_os_version "${CMAKE_OSX_DEPLOYMENT_TARGET}")
-    endif()
-
-    # compiler.version (Conan form) + MSVC toolset bridge
+    # MSVC has two version forms: Conan's (193) and the toolset (143) the triplet uses
     set(_toolset "")
     if(MSVC)
+        set(_compiler "msvc")
         math(EXPR _compiler_ver "${MSVC_VERSION} / 10")   # 1939 -> 193
         set(_toolset "v${MSVC_TOOLSET_VERSION}")          # v143
     else()
-        set(_compiler_ver "${OPENDAQ_TRIPLET_COMPILER_VER}")
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            set(_compiler "gcc")
+        elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+            set(_compiler "apple-clang")
+        elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+            set(_compiler "clang")
+        elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel" OR CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+            set(_compiler "intel-cc")
+        else()
+            string(TOLOWER "${CMAKE_CXX_COMPILER_ID}" _compiler)
+        endif()
+        string(REGEX REPLACE "^([0-9]+).*" "\\1" _compiler_ver "${CMAKE_CXX_COMPILER_VERSION}")
     endif()
 
-    # compiler.cppstd. CMake leaves C++ extensions ON by default for gcc/clang
-    # (-std=gnu++NN); only MSVC, or an explicit CMAKE_CXX_EXTENSIONS=OFF, gives plain NN.
+    # compiler.cppstd: gcc/clang default to -std=gnu++NN, hence the gnu prefix
     set(_cppstd "")
     if(CMAKE_CXX_STANDARD)
         set(_cppstd "${CMAKE_CXX_STANDARD}")
@@ -167,8 +113,7 @@ function(opendaq_detect_settings)
         endif()
     endif()
 
-    # compiler.libcxx. macOS -> libc++, Linux -> libstdc++*. Omitted on Windows:
-    # both MSVC and clang there target the MSVC C++ runtime, not libstdc++/libc++.
+    # compiler.libcxx: omitted on Windows, where the C++ runtime is the MSVC one
     set(_libcxx "")
     if(_os STREQUAL "Macos")
         set(_libcxx "libc++")
@@ -183,8 +128,7 @@ function(opendaq_detect_settings)
         endif()
     endif()
 
-    # compiler.runtime (Windows only -- MSVC and clang both link the MSVC runtime;
-    # CMake's default is the DLL runtime -> dynamic).
+    # compiler.runtime: Windows only, CMake defaults to the DLL runtime
     set(_runtime "")
     if(_os STREQUAL "Windows")
         if(CMAKE_MSVC_RUNTIME_LIBRARY AND NOT CMAKE_MSVC_RUNTIME_LIBRARY MATCHES "DLL")
@@ -194,22 +138,20 @@ function(opendaq_detect_settings)
         endif()
     endif()
 
-    # build_type (capitalized) from the lowercase triplet form
-    set(_bt "${OPENDAQ_TRIPLET_BUILD_TYPE}")
-    if(_bt STREQUAL "release")
-        set(_bt "Release")
-    elseif(_bt STREQUAL "debug")
-        set(_bt "Debug")
-    elseif(_bt STREQUAL "relwithdebinfo")
-        set(_bt "RelWithDebInfo")
-    elseif(_bt STREQUAL "minsizerel")
-        set(_bt "MinSizeRel")
+    # build_type, capitalized; multi-config generators default to Release
+    set(_bt "Release")
+    if(CMAKE_BUILD_TYPE)
+        string(TOLOWER "${CMAKE_BUILD_TYPE}" _bt_lower)
+        if(_bt_lower STREQUAL "debug")
+            set(_bt "Debug")
+        elseif(_bt_lower STREQUAL "relwithdebinfo")
+            set(_bt "RelWithDebInfo")
+        elseif(_bt_lower STREQUAL "minsizerel")
+            set(_bt "MinSizeRel")
+        endif()
     endif()
 
-    # custom.glibc (Linux only) — the compat floor.
-    # getconf reports the host glibc; inside a manylinux container that IS the policy
-    # baseline (the image is built on a distro with exactly that glibc), so one
-    # unconditional query covers both generic-linux and manylinux.
+    # custom.glibc: the host glibc, which in a manylinux image is its policy baseline
     set(_glibc "")
     if(_os STREQUAL "Linux")
         execute_process(COMMAND getconf GNU_LIBC_VERSION
@@ -219,182 +161,198 @@ function(opendaq_detect_settings)
         string(REGEX MATCH "[0-9]+\\.[0-9]+" _glibc "${_libc_out}")
     endif()
 
-    set(OPENDAQ_PLATFORM                  "${_platform}"                  PARENT_SCOPE)
-    set(OPENDAQ_SETTINGS_OS               "${_os}"                        PARENT_SCOPE)
-    set(OPENDAQ_SETTINGS_OS_VERSION       "${_os_version}"                PARENT_SCOPE)
-    set(OPENDAQ_SETTINGS_ARCH             "${OPENDAQ_TRIPLET_ARCH}"       PARENT_SCOPE)
-    set(OPENDAQ_SETTINGS_COMPILER         "${OPENDAQ_TRIPLET_COMPILER}"   PARENT_SCOPE)
-    set(OPENDAQ_SETTINGS_COMPILER_VERSION "${_compiler_ver}"             PARENT_SCOPE)
-    set(OPENDAQ_SETTINGS_COMPILER_TOOLSET "${_toolset}"                   PARENT_SCOPE)
-    set(OPENDAQ_SETTINGS_COMPILER_CPPSTD  "${_cppstd}"                    PARENT_SCOPE)
-    set(OPENDAQ_SETTINGS_COMPILER_LIBCXX  "${_libcxx}"                    PARENT_SCOPE)
-    set(OPENDAQ_SETTINGS_COMPILER_RUNTIME "${_runtime}"                   PARENT_SCOPE)
-    set(OPENDAQ_SETTINGS_BUILD_TYPE       "${_bt}"                        PARENT_SCOPE)
-    set(OPENDAQ_CUSTOM_GLIBC              "${_glibc}"                     PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_SETTINGS_OS               "${_os}"           PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_SETTINGS_OS_VERSION       "${_os_version}"   PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_SETTINGS_ARCH             "${_arch}"         PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_SETTINGS_COMPILER         "${_compiler}"     PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_SETTINGS_COMPILER_VERSION "${_compiler_ver}" PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_SETTINGS_COMPILER_TOOLSET "${_toolset}"      PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_SETTINGS_COMPILER_CPPSTD  "${_cppstd}"       PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_SETTINGS_COMPILER_LIBCXX  "${_libcxx}"       PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_SETTINGS_COMPILER_RUNTIME "${_runtime}"      PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_SETTINGS_BUILD_TYPE       "${_bt}"           PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_CUSTOM_PLATFORM           "${_platform}"     PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_CUSTOM_GLIBC              "${_glibc}"        PARENT_SCOPE)
 endfunction()
 
 ##
-## opendaq_write_staging_meta(VERSION <ver> OUTPUT <path>
-##                            [INSTALL_DESTINATION <dir>] [COMPONENTS <c>...])
-##   Writes the staging metadata (staging-meta.json). Pure formatting -- no detection,
-##   no name composition: reuses OPENDAQ_PACKAGE_NAME / OPENDAQ_PACKAGE_BASENAME from
-##   opendaq_generate_package_name() and OPENDAQ_SETTINGS_* from opendaq_detect_settings()
-##   (called here if not already). VERSION is the metadata's `version` field (the semantic
-##   version, which may differ from the version embedded in the package name, e.g. +sha).
-##   Empty settings/custom fields are omitted, not emitted.
+## opendaq_detect_package()
+##   Finds what is being packaged.
 ##
-##   The metadata ships two ways:
-##     - inside every package (cpack packs the install tree, so one install() covers the
-##       tarball and all installers), at INSTALL_DESTINATION (default share/opendaq);
-##     - next to each package in CPACK_PACKAGE_DIRECTORY, so publishing reads it without
-##       unpacking the tarball.
+##   name:    CPACK_OPENDAQ_META_PACKAGE_NAME > lowercase PROJECT_NAME
+##   version: CPACK_OPENDAQ_META_PACKAGE_VERSION > PROJECT_VERSION
 ##
-##   COMPONENTS lists the project's install components. The metadata is installed into
-##   each of them: with component-scoped packaging (CPACK_COMPONENTS_ALL) an untagged
-##   install() lands in "Unspecified" and is silently dropped from the package.
+##   Both are read back from the variables they set: a project sets them before calling, a
+##   cpack run with -D. The version suffix is not detected -- see
+##   opendaq_compose_package_file_name().
 ##
-function(opendaq_write_staging_meta)
-    set(oneValueArgs VERSION OUTPUT INSTALL_DESTINATION)
-    set(multiValueArgs COMPONENTS)
-    cmake_parse_arguments(ARG "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+##   Sets: CPACK_OPENDAQ_META_PACKAGE_NAME, CPACK_OPENDAQ_META_PACKAGE_VERSION
+##
+function(opendaq_detect_package)
+    if(CPACK_OPENDAQ_META_PACKAGE_NAME)
+        set(_name "${CPACK_OPENDAQ_META_PACKAGE_NAME}")
+    else()
+        string(TOLOWER "${PROJECT_NAME}" _name)
+    endif()
 
-    if(NOT DEFINED ARG_VERSION)
-        message(FATAL_ERROR "opendaq_write_staging_meta() requires VERSION")
+    if(CPACK_OPENDAQ_META_PACKAGE_VERSION)
+        set(_version "${CPACK_OPENDAQ_META_PACKAGE_VERSION}")
+    else()
+        set(_version "${PROJECT_VERSION}")
     endif()
-    if(NOT DEFINED ARG_OUTPUT)
-        message(FATAL_ERROR "opendaq_write_staging_meta() requires OUTPUT")
+
+    if(NOT _name OR NOT _version)
+        message(FATAL_ERROR "opendaq_detect_package(): no package name or version to work with")
     endif()
-    if(NOT DEFINED ARG_INSTALL_DESTINATION)
-        set(ARG_INSTALL_DESTINATION "share/opendaq")
-    endif()
-    if(NOT DEFINED OPENDAQ_PACKAGE_NAME)
-        message(FATAL_ERROR "opendaq_write_staging_meta(): call opendaq_generate_package_name() first")
-    endif()
-    if(NOT DEFINED OPENDAQ_SETTINGS_OS)
+
+    set(CPACK_OPENDAQ_META_PACKAGE_NAME    "${_name}"    PARENT_SCOPE)
+    set(CPACK_OPENDAQ_META_PACKAGE_VERSION "${_version}" PARENT_SCOPE)
+endfunction()
+
+##
+## opendaq_compose_package_triplet([ARCH <a>] [PLATFORM <p>] [COMPILER <c>]
+##                                 [COMPILER_VERSION <v>] [BUILD_TYPE <b>]
+##                                 [OUTPUT_VARIABLE <var>])
+##   <arch>-<platform>-<compiler>-<version>-<build_type>, from the detected settings unless
+##   a part is given. Not a plain copy of them: the os segment is the platform
+##   (manylinux_2_28, not Linux) and MSVC contributes its toolset rather than its Conan
+##   compiler version.
+##
+##   Calls opendaq_detect_settings() when the settings are not there yet.
+##
+##   Sets: CPACK_OPENDAQ_META_PACKAGE_TRIPLET, and OUTPUT_VARIABLE if given
+##
+function(opendaq_compose_package_triplet)
+    cmake_parse_arguments(ARG "" "ARCH;PLATFORM;COMPILER;COMPILER_VERSION;BUILD_TYPE;OUTPUT_VARIABLE" "" ${ARGN})
+
+    if(NOT CPACK_OPENDAQ_META_SETTINGS_ARCH)
         opendaq_detect_settings()
     endif()
 
-    set(_name "${OPENDAQ_PACKAGE_BASENAME}")
-    set(_archive "${OPENDAQ_PACKAGE_NAME}.tar.gz")
-    set(_media "application/vnd.opendaq.staging.layer.v1.tar+gzip")
-
-    # package block (all four always present)
-    set(_pkg "")
-    list(APPEND _pkg "    \"name\": \"${_name}\"")
-    list(APPEND _pkg "    \"version\": \"${ARG_VERSION}\"")
-    list(APPEND _pkg "    \"platform\": \"${OPENDAQ_PLATFORM}\"")
-    list(APPEND _pkg "    \"archive\": \"${_archive}\"")
-    string(JOIN ",\n" _pkg_block ${_pkg})
-
-    # settings block (omit empty fields)
-    set(_s "")
-    list(APPEND _s "    \"os\": \"${OPENDAQ_SETTINGS_OS}\"")
-    if(OPENDAQ_SETTINGS_OS_VERSION)
-        list(APPEND _s "    \"os.version\": \"${OPENDAQ_SETTINGS_OS_VERSION}\"")
+    if(NOT DEFINED ARG_ARCH)
+        set(ARG_ARCH "${CPACK_OPENDAQ_META_SETTINGS_ARCH}")
     endif()
-    list(APPEND _s "    \"arch\": \"${OPENDAQ_SETTINGS_ARCH}\"")
-    list(APPEND _s "    \"compiler\": \"${OPENDAQ_SETTINGS_COMPILER}\"")
-    list(APPEND _s "    \"compiler.version\": \"${OPENDAQ_SETTINGS_COMPILER_VERSION}\"")
-    if(OPENDAQ_SETTINGS_COMPILER_TOOLSET)
-        list(APPEND _s "    \"compiler.toolset\": \"${OPENDAQ_SETTINGS_COMPILER_TOOLSET}\"")
+    if(NOT DEFINED ARG_PLATFORM)
+        set(ARG_PLATFORM "${CPACK_OPENDAQ_META_CUSTOM_PLATFORM}")
     endif()
-    if(OPENDAQ_SETTINGS_COMPILER_LIBCXX)
-        list(APPEND _s "    \"compiler.libcxx\": \"${OPENDAQ_SETTINGS_COMPILER_LIBCXX}\"")
+    if(NOT DEFINED ARG_COMPILER)
+        set(ARG_COMPILER "${CPACK_OPENDAQ_META_SETTINGS_COMPILER}")
     endif()
-    if(OPENDAQ_SETTINGS_COMPILER_CPPSTD)
-        list(APPEND _s "    \"compiler.cppstd\": \"${OPENDAQ_SETTINGS_COMPILER_CPPSTD}\"")
+    if(NOT DEFINED ARG_COMPILER_VERSION)
+        if(CPACK_OPENDAQ_META_SETTINGS_COMPILER_TOOLSET)
+            string(REGEX REPLACE "^v" "" ARG_COMPILER_VERSION "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_TOOLSET}")
+        else()
+            set(ARG_COMPILER_VERSION "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_VERSION}")
+        endif()
     endif()
-    if(OPENDAQ_SETTINGS_COMPILER_RUNTIME)
-        list(APPEND _s "    \"compiler.runtime\": \"${OPENDAQ_SETTINGS_COMPILER_RUNTIME}\"")
-    endif()
-    list(APPEND _s "    \"build_type\": \"${OPENDAQ_SETTINGS_BUILD_TYPE}\"")
-    string(JOIN ",\n" _settings_block ${_s})
-
-    # assemble
-    set(_json "{\n")
-    string(APPEND _json "  \"schema\": 1,\n")
-    string(APPEND _json "  \"media-type\": \"${_media}\",\n")
-    string(APPEND _json "  \"package\": {\n${_pkg_block}\n  },\n")
-    string(APPEND _json "  \"settings\": {\n${_settings_block}\n  }")
-    if(OPENDAQ_CUSTOM_GLIBC)
-        string(APPEND _json ",\n  \"custom\": {\n    \"glibc\": \"${OPENDAQ_CUSTOM_GLIBC}\"\n  }")
-    endif()
-    string(APPEND _json "\n}\n")
-
-    file(WRITE "${ARG_OUTPUT}" "${_json}")
-    message(STATUS "Wrote staging metadata: ${ARG_OUTPUT}")
-
-    # Ship the staging metadata inside the package: cpack builds every package from the
-    # install tree, so this one install() puts it in the tarball and in each installer.
-    if(ARG_COMPONENTS)
-        foreach(_component IN LISTS ARG_COMPONENTS)
-            install(FILES "${ARG_OUTPUT}"
-                    DESTINATION "${ARG_INSTALL_DESTINATION}"
-                    COMPONENT "${_component}")
-        endforeach()
-    else()
-        install(FILES "${ARG_OUTPUT}" DESTINATION "${ARG_INSTALL_DESTINATION}")
+    if(NOT DEFINED ARG_BUILD_TYPE)
+        string(TOLOWER "${CPACK_OPENDAQ_META_SETTINGS_BUILD_TYPE}" ARG_BUILD_TYPE)
     endif()
 
-    # Co-locate the staging metadata next to each cpack package (tarball / installer)
-    # in CPACK_PACKAGE_DIRECTORY, via a post-build hook run by cpack.
-    set(CPACK_OPENDAQ_STAGING_META_FILE "${ARG_OUTPUT}" PARENT_SCOPE)
-    list(APPEND CPACK_POST_BUILD_SCRIPTS "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/opendaq_copy_staging_meta.cmake")
-    set(CPACK_POST_BUILD_SCRIPTS "${CPACK_POST_BUILD_SCRIPTS}" PARENT_SCOPE)
+    set(_triplet "${ARG_ARCH}-${ARG_PLATFORM}-${ARG_COMPILER}-${ARG_COMPILER_VERSION}-${ARG_BUILD_TYPE}")
+
+    set(CPACK_OPENDAQ_META_PACKAGE_TRIPLET "${_triplet}" PARENT_SCOPE)
+    if(DEFINED ARG_OUTPUT_VARIABLE)
+        set(${ARG_OUTPUT_VARIABLE} "${_triplet}" PARENT_SCOPE)
+    endif()
 endfunction()
 
 ##
-## opendaq_setup_packaging(VERSION <v> [NAME <n>] [STAGING_META <path>] [GENERATOR <g>]
-##                         [INSTALL_DESTINATION <dir>] [COMPONENTS <c>...] [NO_CPACK])
-##   One-call packaging setup: detect triplet, compose package name, write the staging
-##   metadata, and set CPACK_PACKAGE_FILE_NAME. Unless NO_CPACK, also set CPACK_GENERATOR
-##   (default TGZ) and call include(CPack).
+## opendaq_compose_package_file_name([BASENAME <b>] [VERSION <v>] [SUFFIX <s>] [TRIPLET <t>]
+##                                   [OUTPUT_VARIABLE <var>])
+##   <basename>-<version><suffix>-<triplet>, from the package and the triplet unless a part
+##   is given. The extension is cpack's business.
 ##
-##   COMPONENTS / INSTALL_DESTINATION are forwarded to opendaq_write_staging_meta() --
-##   pass the project's install components so the metadata ships inside component-scoped
-##   packages.
+##   SUFFIX is appended to the version verbatim, separator included -- "-<short sha>",
+##   ".dev5", "+local". Nothing detects it: it comes from
+##   CPACK_OPENDAQ_META_PACKAGE_VERSION_SUFFIX, which a project sets.
 ##
-##   A MACRO (not a function), so all variables land in the CALLER scope -- with NO_CPACK
-##   the caller can add its own CPACK_* config and call include(CPack) itself (CPack freezes
-##   the config, so it must be the last step; e.g. core's installer config).
+##   Sets: CPACK_PACKAGE_FILE_NAME, and OUTPUT_VARIABLE if given
 ##
-##   Module (runtime-only):  opendaq_setup_packaging(VERSION ${module_version})
-##   Core (installers):      opendaq_setup_packaging(VERSION ${VER} NAME opendaq NO_CPACK)
-##                           # ... set(CPACK_GENERATOR ...) / CPACK_NSIS_* / ... ; include(CPack)
+function(opendaq_compose_package_file_name)
+    cmake_parse_arguments(ARG "" "BASENAME;VERSION;SUFFIX;TRIPLET;OUTPUT_VARIABLE" "" ${ARGN})
+
+    if(NOT DEFINED ARG_BASENAME)
+        set(ARG_BASENAME "${CPACK_OPENDAQ_META_PACKAGE_NAME}")
+    endif()
+    if(NOT DEFINED ARG_VERSION)
+        set(ARG_VERSION "${CPACK_OPENDAQ_META_PACKAGE_VERSION}")
+    endif()
+    if(NOT DEFINED ARG_SUFFIX)
+        set(ARG_SUFFIX "${CPACK_OPENDAQ_META_PACKAGE_VERSION_SUFFIX}")
+    endif()
+    if(NOT DEFINED ARG_TRIPLET)
+        set(ARG_TRIPLET "${CPACK_OPENDAQ_META_PACKAGE_TRIPLET}")
+    endif()
+
+    set(_file_name "${ARG_BASENAME}-${ARG_VERSION}${ARG_SUFFIX}-${ARG_TRIPLET}")
+
+    set(CPACK_PACKAGE_FILE_NAME "${_file_name}" PARENT_SCOPE)
+    if(DEFINED ARG_OUTPUT_VARIABLE)
+        set(${ARG_OUTPUT_VARIABLE} "${_file_name}" PARENT_SCOPE)
+    endif()
+endfunction()
+
 ##
-macro(opendaq_setup_packaging)
-    cmake_parse_arguments(_OSP "NO_CPACK" "VERSION;NAME;STAGING_META;GENERATOR;INSTALL_DESTINATION" "COMPONENTS" ${ARGN})
+## opendaq_write_metadata(OUTPUT <path>)
+##   Writes the metadata to OUTPUT, and nothing else: installing or copying that file is the
+##   caller's call. A field is written when it has a value, a section when any of its fields
+##   does.
+##
+function(opendaq_write_metadata)
+    cmake_parse_arguments(ARG "" "OUTPUT" "" ${ARGN})
 
-    if(NOT DEFINED _OSP_VERSION)
-        message(FATAL_ERROR "opendaq_setup_packaging() requires VERSION")
-    endif()
-    if(NOT DEFINED _OSP_STAGING_META)
-        set(_OSP_STAGING_META "${CMAKE_BINARY_DIR}/staging-meta.json")
-    endif()
-    if(NOT DEFINED _OSP_GENERATOR)
-        set(_OSP_GENERATOR "TGZ")
-    endif()
-
-    set(_OSP_META_ARGS "")
-    if(_OSP_COMPONENTS)
-        list(APPEND _OSP_META_ARGS COMPONENTS ${_OSP_COMPONENTS})
-    endif()
-    if(DEFINED _OSP_INSTALL_DESTINATION)
-        list(APPEND _OSP_META_ARGS INSTALL_DESTINATION "${_OSP_INSTALL_DESTINATION}")
+    if(NOT DEFINED ARG_OUTPUT)
+        message(FATAL_ERROR "opendaq_write_metadata() requires OUTPUT")
     endif()
 
-    opendaq_detect_triplet()
-    if(DEFINED _OSP_NAME)
-        opendaq_generate_package_name(VERSION "${_OSP_VERSION}" NAME "${_OSP_NAME}")
-    else()
-        opendaq_generate_package_name(VERSION "${_OSP_VERSION}")
-    endif()
-    opendaq_write_staging_meta(VERSION "${_OSP_VERSION}" OUTPUT "${_OSP_STAGING_META}" ${_OSP_META_ARGS})
+    # append `"key": "value"` to <list>, unless the value is empty
+    macro(_daq_meta_member list key value)
+        if(NOT "${value}" STREQUAL "")
+            list(APPEND ${list} "    \"${key}\": \"${value}\"")
+        endif()
+    endmacro()
 
-    set(CPACK_PACKAGE_FILE_NAME "${OPENDAQ_PACKAGE_NAME}")
-
-    if(NOT _OSP_NO_CPACK)
-        set(CPACK_GENERATOR "${_OSP_GENERATOR}")
-        include(CPack)
+    # no name, no package to describe
+    set(_package "")
+    if(CPACK_OPENDAQ_META_PACKAGE_NAME)
+        _daq_meta_member(_package "name"           "${CPACK_OPENDAQ_META_PACKAGE_NAME}")
+        _daq_meta_member(_package "version"        "${CPACK_OPENDAQ_META_PACKAGE_VERSION}")
+        _daq_meta_member(_package "version.suffix" "${CPACK_OPENDAQ_META_PACKAGE_VERSION_SUFFIX}")
+        _daq_meta_member(_package "triplet"        "${CPACK_OPENDAQ_META_PACKAGE_TRIPLET}")
     endif()
-endmacro()
+
+    set(_settings "")
+    _daq_meta_member(_settings "os"               "${CPACK_OPENDAQ_META_SETTINGS_OS}")
+    _daq_meta_member(_settings "os.version"       "${CPACK_OPENDAQ_META_SETTINGS_OS_VERSION}")
+    _daq_meta_member(_settings "arch"             "${CPACK_OPENDAQ_META_SETTINGS_ARCH}")
+    _daq_meta_member(_settings "compiler"         "${CPACK_OPENDAQ_META_SETTINGS_COMPILER}")
+    _daq_meta_member(_settings "compiler.version" "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_VERSION}")
+    _daq_meta_member(_settings "compiler.toolset" "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_TOOLSET}")
+    _daq_meta_member(_settings "compiler.libcxx"  "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_LIBCXX}")
+    _daq_meta_member(_settings "compiler.cppstd"  "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_CPPSTD}")
+    _daq_meta_member(_settings "compiler.runtime" "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_RUNTIME}")
+    _daq_meta_member(_settings "build_type"       "${CPACK_OPENDAQ_META_SETTINGS_BUILD_TYPE}")
+
+    set(_custom "")
+    _daq_meta_member(_custom "platform" "${CPACK_OPENDAQ_META_CUSTOM_PLATFORM}")
+    _daq_meta_member(_custom "glibc"    "${CPACK_OPENDAQ_META_CUSTOM_GLIBC}")
+
+    set(_sections "")
+    foreach(_section package settings custom)
+        if(_${_section})
+            string(JOIN ",\n" _members ${_${_section}})
+            list(APPEND _sections "  \"${_section}\": {\n${_members}\n  }")
+        endif()
+    endforeach()
+    string(JOIN ",\n" _body ${_sections})
+
+    set(_json "{\n")
+    string(APPEND _json "  \"schema\": 1,\n")
+    string(APPEND _json "  \"media-type\": \"application/vnd.opendaq.staging.layer.v1.tar+gzip\",\n")
+    string(APPEND _json "${_body}\n")
+    string(APPEND _json "}\n")
+
+    file(WRITE "${ARG_OUTPUT}" "${_json}")
+    message(STATUS "Wrote metadata: ${ARG_OUTPUT}")
+endfunction()
