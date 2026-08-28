@@ -1,3 +1,13 @@
+## v1.0.3
+ - Replace the packaging utilities with staging metadata generation: the metadata is detected into `CPACK_OPENDAQ_META_*` variables, and the package name and triplet are composed from it -- `opendaq_detect_settings`, `opendaq_detect_package`, `opendaq_compose_package_triplet`, `opendaq_compose_package_file_name`, `opendaq_write_metadata`
+ - Compose the package name per cpack run, through the `CPACK_OPENDAQ_PROJECT_CONFIG` project config file, so one build can yield several named packages
+ - Remove `opendaq_setup_packaging`, `opendaq_generate_package_name`, `opendaq_write_staging_meta` and the post-build metadata copy
+
+## v1.0.2
+ - Add the packaging utilities: triplet detection, package naming and the staging metadata (`opendaq_detect_triplet`, `opendaq_generate_package_name`, `opendaq_detect_settings`, `opendaq_write_staging_meta`, `opendaq_setup_packaging`)
+ - Include them from the project, so a consumer gets them with the rest of the utils
+ - Fix the Boost alias shim when `Boost::headers` is itself an alias
+
 ## v1.0.1
  - Add target-based CMake enforcement by overriding directory-scoped commands (include_directories, add_definitions, link_directories)
 
