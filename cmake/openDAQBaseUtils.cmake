@@ -289,7 +289,8 @@ function(opendaq_use_compiler_cache)
     set(ccacheEnv
         CCACHE_BASEDIR=${CMAKE_SOURCE_DIR}
         CCACHE_CPP2=true
-        CCACHE_SLOPPINESS=pch_defines,time_macros
+        # pch_defines,time_macros are required for PCH; the mtime/ctime ones avoid misses on generated headers
+        CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime
     )
 
     if(CMAKE_GENERATOR MATCHES "Ninja|Makefiles")

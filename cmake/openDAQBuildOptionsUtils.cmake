@@ -13,6 +13,7 @@ macro(opendaq_setup_common_build_options)
     option(OPENDAQ_DISABLE_DEBUG_POSTFIX "Disable debug ('-debug') postfix" OFF)
     option(OPENDAQ_ALWAYS_FETCH_DEPENDENCIES "Ignore any installed libraries and always build all dependencies from source" ON)
     option(OPENDAQ_USE_CCACHE "Use compiler cache driver if available" ON)
+    opendaq_setup_build_acceleration_options()
 
     # Runtime and default 3rd party library linking options
     option(OPENDAQ_LINK_RUNTIME_STATICALLY "Link the C++ runtime staticaly (embedd it)" OFF)
