@@ -1,6 +1,6 @@
 ## v1.1.0
  - Add the build acceleration utilities: `opendaq_target_pch`, `opendaq_target_pch_reuse`, `opendaq_target_pch_group`, `opendaq_directory_pch`, `opendaq_target_unity_tests`, `opendaq_target_unity_bindings`, `opendaq_target_unity_libs`
- - Add `OPENDAQ_ENABLE_BUILD_ACCELERATION` (ON) gating `OPENDAQ_ENABLE_PCH`, `OPENDAQ_ENABLE_UNITY_TESTS`, `OPENDAQ_ENABLE_UNITY_BINDINGS`, `OPENDAQ_ENABLE_UNITY_LIBS` (all ON) to `opendaq_setup_common_build_options`
+ - Add `OPENDAQ_ENABLE_BUILD_ACCELERATION` (ON) gating `OPENDAQ_ENABLE_PCH`, `OPENDAQ_ENABLE_UNITY_TESTS`, `OPENDAQ_ENABLE_UNITY_BINDINGS` (ON) and `OPENDAQ_ENABLE_UNITY_LIBS` (OFF), plus `OPENDAQ_UNITY_BATCH_SIZE`, to `opendaq_setup_common_build_options`
  - Make ccache work with GCC precompiled headers (`-fpch-preprocess`, sloppiness)
 
 ## v1.0.3

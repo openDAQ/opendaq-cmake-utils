@@ -1,9 +1,11 @@
 # Build acceleration: precompiled headers (PCH) and unity builds (several .cpp files compiled
 # as one translation unit).
 #
-# Options: OPENDAQ_ENABLE_PCH, OPENDAQ_ENABLE_UNITY_TESTS, OPENDAQ_ENABLE_UNITY_BINDINGS and
-# OPENDAQ_ENABLE_UNITY_LIBS, gated by OPENDAQ_ENABLE_BUILD_ACCELERATION and declared by
-# opendaq_setup_common_build_options(). Every helper is a no-op when its option is off.
+# Options: OPENDAQ_ENABLE_PCH, OPENDAQ_ENABLE_UNITY_TESTS, OPENDAQ_ENABLE_UNITY_BINDINGS (ON) and
+# OPENDAQ_ENABLE_UNITY_LIBS (OFF, costs incremental rebuild granularity), gated by
+# OPENDAQ_ENABLE_BUILD_ACCELERATION and declared by opendaq_setup_common_build_options().
+# OPENDAQ_UNITY_BATCH_SIZE is the default sources-per-unity-file. Every helper is a no-op when
+# its option is off.
 #
 # Rules for sources in a unity build, where files can see each other's file-level names:
 #   1. Put file-private helpers and types in a namespace unique to the file. static and
@@ -21,7 +23,8 @@ macro(opendaq_setup_build_acceleration_options)
     option(OPENDAQ_ENABLE_PCH "Use precompiled headers" ON)
     option(OPENDAQ_ENABLE_UNITY_TESTS "Unity builds for test targets" ON)
     option(OPENDAQ_ENABLE_UNITY_BINDINGS "Unity builds for generated language bindings" ON)
-    option(OPENDAQ_ENABLE_UNITY_LIBS "Unity builds for libraries" ON)
+    option(OPENDAQ_ENABLE_UNITY_LIBS "Unity builds for libraries" OFF)
+    set(OPENDAQ_UNITY_BATCH_SIZE 12 CACHE STRING "Sources per unity translation unit when a call gives no BATCH_SIZE")
 
     _opendaq_report_build_acceleration()
 endmacro()
@@ -72,7 +75,7 @@ endfunction()
 # inside a PCH; std::exception_ptr then copies them bitwise and double-frees the message.
 function(opendaq_pch_in_use OUT_VAR)
     _opendaq_acceleration_enabled(OPENDAQ_ENABLE_PCH PCH_ENABLED)
-    if (PCH_ENABLED AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+    if (PCH_ENABLED AND NOT CMAKE_DISABLE_PRECOMPILE_HEADERS AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
         set(${OUT_VAR} TRUE PARENT_SCOPE)
     else()
         set(${OUT_VAR} FALSE PARENT_SCOPE)
@@ -121,7 +124,8 @@ function(opendaq_target_pch_reuse TARGET_NAME DONOR_NAME)
 endfunction()
 
 # opendaq_target_pch_group(<target> <group> <header>...)
-# The first target of a group builds the PCH, later ones reuse it.
+# The first target of a group builds the PCH, later ones reuse it. Groups are per project, so
+# subprojects with different flags cannot share a PCH by accident.
 function(opendaq_target_pch_group TARGET_NAME GROUP_NAME)
     opendaq_pch_in_use(PCH_IN_USE)
     if (NOT PCH_IN_USE)
@@ -129,39 +133,24 @@ function(opendaq_target_pch_group TARGET_NAME GROUP_NAME)
         return()
     endif()
 
-    get_property(DONOR GLOBAL PROPERTY OPENDAQ_PCH_GROUP_${GROUP_NAME})
+    set(GROUP_KEY OPENDAQ_PCH_GROUP_${PROJECT_NAME}_${GROUP_NAME})
+    get_property(DONOR GLOBAL PROPERTY ${GROUP_KEY})
     if (DONOR)
         opendaq_target_pch_reuse(${TARGET_NAME} ${DONOR})
     else()
         opendaq_target_pch(${TARGET_NAME} ${ARGN})
-        set_property(GLOBAL PROPERTY OPENDAQ_PCH_GROUP_${GROUP_NAME} ${TARGET_NAME})
+        set_property(GLOBAL PROPERTY ${GROUP_KEY} ${TARGET_NAME})
     endif()
 endfunction()
 
-# opendaq_directory_pch(<donor> HEADERS <header>... LINK_LIBRARIES <target>... [EXCLUDE <regex>])
-# One PCH for the executables defined so far in the current directory: a stub executable
-# <donor> linked against LINK_LIBRARIES builds it, the others reuse it. Skips targets matching
-# EXCLUDE (e.g. C targets) and targets that already have a PCH.
-function(opendaq_directory_pch DONOR_NAME)
-    cmake_parse_arguments(PCH "" "EXCLUDE" "HEADERS;LINK_LIBRARIES" ${ARGN})
-
-    opendaq_pch_in_use(PCH_IN_USE)
-    if (NOT PCH_IN_USE)
-        return()
-    endif()
-
-    set(STUB ${CMAKE_CURRENT_BINARY_DIR}/${DONOR_NAME}_stub.cpp)
-    file(CONFIGURE OUTPUT ${STUB} CONTENT "int main()\n{\n    return 0;\n}\n")
-    add_executable(${DONOR_NAME} ${STUB})
-    set_target_properties(${DONOR_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    target_link_libraries(${DONOR_NAME} PRIVATE ${PCH_LINK_LIBRARIES})
-    opendaq_target_pch(${DONOR_NAME} ${PCH_HEADERS})
+# opendaq_directory_pch(<group> HEADERS <header>... [EXCLUDE <regex>])
+# Puts the executables defined so far in the current directory into one PCH group. Skips targets
+# matching EXCLUDE (e.g. C targets) and targets that already have a PCH.
+function(opendaq_directory_pch GROUP_NAME)
+    cmake_parse_arguments(PCH "" "EXCLUDE" "HEADERS" ${ARGN})
 
     get_property(TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
     foreach(TARGET_NAME IN LISTS TARGETS)
-        if (TARGET_NAME STREQUAL DONOR_NAME)
-            continue()
-        endif()
         if (PCH_EXCLUDE AND TARGET_NAME MATCHES "${PCH_EXCLUDE}")
             continue()
         endif()
@@ -174,7 +163,7 @@ function(opendaq_directory_pch DONOR_NAME)
         if (OWN_PCH OR OWN_REUSE)
             continue()
         endif()
-        opendaq_target_pch_reuse(${TARGET_NAME} ${DONOR_NAME})
+        opendaq_target_pch_group(${TARGET_NAME} ${GROUP_NAME} ${PCH_HEADERS})
     endforeach()
 endfunction()
 
@@ -187,7 +176,7 @@ function(_opendaq_target_unity OPTION_NAME TARGET_NAME)
     endif()
 
     if (NOT UNITY_BATCH_SIZE)
-        set(UNITY_BATCH_SIZE 12)
+        set(UNITY_BATCH_SIZE ${OPENDAQ_UNITY_BATCH_SIZE})
     endif()
 
     set_target_properties(${TARGET_NAME} PROPERTIES
