@@ -1,14 +1,18 @@
-# Precompiled headers and unity (jumbo) translation units.
+# Build acceleration: precompiled headers (PCH) and unity builds (several .cpp files compiled
+# as one translation unit).
 #
-# Options (declared by opendaq_setup_build_acceleration_options, called from
-# opendaq_setup_common_build_options): OPENDAQ_ENABLE_PCH, OPENDAQ_ENABLE_UNITY_TESTS,
-# OPENDAQ_ENABLE_UNITY_BINDINGS and OPENDAQ_ENABLE_UNITY_LIBS, all gated by
-# OPENDAQ_ENABLE_BUILD_ACCELERATION. Every helper is a no-op when its option is off.
+# Options: OPENDAQ_ENABLE_PCH, OPENDAQ_ENABLE_UNITY_TESTS, OPENDAQ_ENABLE_UNITY_BINDINGS and
+# OPENDAQ_ENABLE_UNITY_LIBS, gated by OPENDAQ_ENABLE_BUILD_ACCELERATION and declared by
+# opendaq_setup_common_build_options(). Every helper is a no-op when its option is off.
 #
-# Unity rules: file-local names go in a per-file namespace (anonymous namespaces and static do
-# not isolate merged sources), using-directives stay at global scope, and a source with main()
-# or other conflicts gets SKIP_UNITY_BUILD_INCLUSION. Headers that declare explicit template
-# specializations belong in the PCH set; without a PCH they are prepended to every unity file.
+# Rules for sources in a unity build, where files can see each other's file-level names:
+#   1. Put file-private helpers and types in a namespace unique to the file. static and
+#      anonymous namespaces do not help, since the merged files are one translation unit.
+#   2. Keep using-directives (using namespace daq;) at global scope, outside that namespace.
+#   3. Exclude a file that must stay alone (defines main(), clashes with a sibling):
+#          set_source_files_properties(test_app.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+#   4. Headers declaring explicit template specializations go in the opendaq_target_pch() list,
+#      so they are seen before any use; without a PCH they are prepended to every unity file.
 
 include_guard(GLOBAL)
 
