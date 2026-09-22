@@ -50,8 +50,10 @@ macro(opendaq_setup_gnu_compiler_flags REPO_OPTION_PREFIX)
     set(GCC_W_NO_EXTRA "-Wno-comment -Wno-unused-parameter -Wno-missing-field-initializers")
     set(GCC_W_NO_WALL "-Wno-unknown-pragmas -Wno-parentheses -Wno-misleading-indentation -Wno-unused-variable -Wno-switch -Wno-maybe-uninitialized -Wno-psabi")
     set(GCC_CHARSET_FLAGS "-fexec-charset=UTF-8 -finput-charset=UTF-8")
+    # GCC (>= 12, aarch64 -O3) misreports the fixed buffer in date::detail::read as overflowing; -Werror would fail the build
+    set(GCC_W_NO_FALSE_POSITIVES "-Wno-stringop-overflow")
     #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Wextra ${GCC_W_NO_EXTRA} ${GCC_W_NO_WALL} ${GCC_W_NO_PEDANTIC} -Werror=return-type")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra ${GCC_W_NO_EXTRA} ${GCC_W_NO_WALL} ${GCC_W_NO_PEDANTIC} -Werror=return-type ${GCC_CHARSET_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra ${GCC_W_NO_EXTRA} ${GCC_W_NO_WALL} ${GCC_W_NO_PEDANTIC} -Werror=return-type ${GCC_W_NO_FALSE_POSITIVES} ${GCC_CHARSET_FLAGS}")
 
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -ggdb")
     if (MINGW)
