@@ -5,6 +5,7 @@
 ##   opendaq_detect_package()              what is being packaged   name and version
 ##   opendaq_compose_package_triplet()     <arch>-<platform>-…      from the settings
 ##   opendaq_compose_package_file_name()   <name>-<version>-…       for CPACK_PACKAGE_FILE_NAME
+##   opendaq_set_metadata_field(…)         a field of the project's own
 ##   opendaq_write_metadata(OUTPUT <p>)    the JSON
 ##
 ## Detect finds facts, compose derives from them, write serializes. A composed part can be
@@ -16,6 +17,16 @@
 ##   CPACK_OPENDAQ_META_PACKAGE_*    NAME, VERSION, VERSION_SUFFIX, TRIPLET   what this package is
 ##   CPACK_OPENDAQ_META_SETTINGS_*   OS, ARCH, COMPILER, …       Conan vocabulary, exactly
 ##   CPACK_OPENDAQ_META_CUSTOM_*     PLATFORM, GLIBC             build axes Conan has no words for
+##
+## A field outside that fixed list goes to CPACK_OPENDAQ_META_FIELDS, a list of
+## <key>/<key>=<value> entries, nested at any depth and in any section:
+##
+##   opendaq_set_metadata_field(dependencies opendaq revision VALUE <sha>)   from the project
+##   -D CPACK_OPENDAQ_META_FIELDS=dependencies/opendaq/revision=<sha>        from the outside
+##
+## An entry with the path of a fixed field overrides it in the metadata only. The fields a
+## package is named by -- package, arch, platform, compiler, build type -- are changed through
+## their variables, or the file name and the metadata part ways.
 ##
 ## A project reads or sets any of them directly. CPACK_ is also the only prefix that survives
 ## into CPackConfig.cmake, so a cpack run sees them and can name a package of its own
@@ -294,10 +305,110 @@ function(opendaq_compose_package_file_name)
 endfunction()
 
 ##
+## opendaq_set_metadata_field(<key>... VALUE <value>)
+##   Sets a field of the project's own. The keys are the path to it, one per level:
+##
+##     opendaq_set_metadata_field(dependencies opendaq revision VALUE "${_core_sha}")
+##
+##       "dependencies": { "opendaq": { "revision": "<sha>" } }
+##
+##   A key may hold a dot -- "os.version" is one key -- but not "/" or "=". Setting a field
+##   again replaces it, an empty VALUE removes it. A field and an object cannot share a path.
+##
+##   Sets CPACK_OPENDAQ_META_FIELDS in the calling scope, which is to be the one that includes
+##   CPack: the cpack run sees the field only through CPackConfig.cmake.
+##
+function(opendaq_set_metadata_field)
+    cmake_parse_arguments(ARG "" "VALUE" "" ${ARGN})
+
+    if(NOT ARG_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "opendaq_set_metadata_field() requires a key")
+    endif()
+    foreach(_key IN LISTS ARG_UNPARSED_ARGUMENTS)
+        if(_key MATCHES "[/=]")
+            message(FATAL_ERROR "opendaq_set_metadata_field(): '/' or '=' in the key '${_key}'")
+        endif()
+    endforeach()
+    string(JOIN "/" _path ${ARG_UNPARSED_ARGUMENTS})
+
+    set(_field "")
+    if(NOT "${ARG_VALUE}" STREQUAL "")
+        set(_field "${_path}=${ARG_VALUE}")
+    endif()
+
+    # the field keeps its place when it is there already
+    set(_fields "")
+    set(_placed FALSE)
+    foreach(_entry IN LISTS CPACK_OPENDAQ_META_FIELDS)
+        string(FIND "${_entry}" "${_path}=" _at)
+        if(NOT _at EQUAL 0)
+            list(APPEND _fields "${_entry}")
+        elseif(NOT _placed)
+            list(APPEND _fields ${_field})
+            set(_placed TRUE)
+        endif()
+    endforeach()
+    if(NOT _placed)
+        list(APPEND _fields ${_field})
+    endif()
+
+    set(CPACK_OPENDAQ_META_FIELDS "${_fields}" PARENT_SCOPE)
+endfunction()
+
+# The JSON of <key>/<key>=<value> entries, as one object: a member per first key, in the order
+# the keys first appear, an object of its own where more keys follow. Of two entries for one
+# field the later gives the value. The outermost object is the document, and opens with its
+# schema and media type.
+function(_opendaq_metadata_fields_to_json out indent)
+    set(_members "")
+    if(indent STREQUAL "")
+        list(APPEND _members "  \"schema\": 1")
+        list(APPEND _members "  \"media-type\": \"application/vnd.opendaq.staging.layer.v1.tar+gzip\"")
+    endif()
+
+    set(_heads "")
+    foreach(_entry IN LISTS ARGN)
+        string(REGEX MATCH "^[^/=]*" _head "${_entry}")
+        list(APPEND _heads "${_head}")
+    endforeach()
+    list(REMOVE_DUPLICATES _heads)
+
+    foreach(_head IN LISTS _heads)
+        set(_leaf "")
+        set(_children "")
+        foreach(_entry IN LISTS ARGN)
+            string(FIND "${_entry}" "${_head}=" _at_leaf)
+            string(FIND "${_entry}" "${_head}/" _at_child)
+            if(_at_leaf EQUAL 0)
+                string(LENGTH "${_head}=" _skip)
+                string(SUBSTRING "${_entry}" ${_skip} -1 _leaf)
+            elseif(_at_child EQUAL 0)
+                string(LENGTH "${_head}/" _skip)
+                string(SUBSTRING "${_entry}" ${_skip} -1 _child)
+                list(APPEND _children "${_child}")
+            endif()
+        endforeach()
+
+        if(_children AND NOT "${_leaf}" STREQUAL "")
+            message(FATAL_ERROR "opendaq_write_metadata(): '${_head}' is both a field and an object")
+        elseif(_children)
+            _opendaq_metadata_fields_to_json(_object "${indent}  " ${_children})
+            list(APPEND _members "${indent}  \"${_head}\": ${_object}")
+        elseif(NOT "${_leaf}" STREQUAL "")
+            list(APPEND _members "${indent}  \"${_head}\": \"${_leaf}\"")
+        endif()
+    endforeach()
+
+    string(JOIN ",\n" _joined ${_members})
+    set(${out} "{\n${_joined}\n${indent}}" PARENT_SCOPE)
+endfunction()
+
+##
 ## opendaq_write_metadata(OUTPUT <path>)
 ##   Writes the metadata to OUTPUT, and nothing else: installing or copying that file is the
 ##   caller's call. A field is written when it has a value, a section when any of its fields
-##   does.
+##   does. The fixed fields come first; those of CPACK_OPENDAQ_META_FIELDS follow, and one
+##   with the path of a fixed field takes its place.
 ##
 function(opendaq_write_metadata)
     cmake_parse_arguments(ARG "" "OUTPUT" "" ${ARGN})
@@ -306,53 +417,34 @@ function(opendaq_write_metadata)
         message(FATAL_ERROR "opendaq_write_metadata() requires OUTPUT")
     endif()
 
-    # append `"key": "value"` to <list>, unless the value is empty
-    macro(_daq_meta_member list key value)
-        if(NOT "${value}" STREQUAL "")
-            list(APPEND ${list} "    \"${key}\": \"${value}\"")
-        endif()
-    endmacro()
+    # the fixed fields open the list, in this scope only
+    set(_project_fields "${CPACK_OPENDAQ_META_FIELDS}")
+    set(CPACK_OPENDAQ_META_FIELDS "")
 
     # no name, no package to describe
-    set(_package "")
     if(CPACK_OPENDAQ_META_PACKAGE_NAME)
-        _daq_meta_member(_package "name"           "${CPACK_OPENDAQ_META_PACKAGE_NAME}")
-        _daq_meta_member(_package "version"        "${CPACK_OPENDAQ_META_PACKAGE_VERSION}")
-        _daq_meta_member(_package "version.suffix" "${CPACK_OPENDAQ_META_PACKAGE_VERSION_SUFFIX}")
-        _daq_meta_member(_package "triplet"        "${CPACK_OPENDAQ_META_PACKAGE_TRIPLET}")
+        opendaq_set_metadata_field(package name           VALUE "${CPACK_OPENDAQ_META_PACKAGE_NAME}")
+        opendaq_set_metadata_field(package version        VALUE "${CPACK_OPENDAQ_META_PACKAGE_VERSION}")
+        opendaq_set_metadata_field(package version.suffix VALUE "${CPACK_OPENDAQ_META_PACKAGE_VERSION_SUFFIX}")
+        opendaq_set_metadata_field(package triplet        VALUE "${CPACK_OPENDAQ_META_PACKAGE_TRIPLET}")
     endif()
 
-    set(_settings "")
-    _daq_meta_member(_settings "os"               "${CPACK_OPENDAQ_META_SETTINGS_OS}")
-    _daq_meta_member(_settings "os.version"       "${CPACK_OPENDAQ_META_SETTINGS_OS_VERSION}")
-    _daq_meta_member(_settings "arch"             "${CPACK_OPENDAQ_META_SETTINGS_ARCH}")
-    _daq_meta_member(_settings "compiler"         "${CPACK_OPENDAQ_META_SETTINGS_COMPILER}")
-    _daq_meta_member(_settings "compiler.version" "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_VERSION}")
-    _daq_meta_member(_settings "compiler.toolset" "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_TOOLSET}")
-    _daq_meta_member(_settings "compiler.libcxx"  "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_LIBCXX}")
-    _daq_meta_member(_settings "compiler.cppstd"  "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_CPPSTD}")
-    _daq_meta_member(_settings "compiler.runtime" "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_RUNTIME}")
-    _daq_meta_member(_settings "build_type"       "${CPACK_OPENDAQ_META_SETTINGS_BUILD_TYPE}")
+    opendaq_set_metadata_field(settings os               VALUE "${CPACK_OPENDAQ_META_SETTINGS_OS}")
+    opendaq_set_metadata_field(settings os.version       VALUE "${CPACK_OPENDAQ_META_SETTINGS_OS_VERSION}")
+    opendaq_set_metadata_field(settings arch             VALUE "${CPACK_OPENDAQ_META_SETTINGS_ARCH}")
+    opendaq_set_metadata_field(settings compiler         VALUE "${CPACK_OPENDAQ_META_SETTINGS_COMPILER}")
+    opendaq_set_metadata_field(settings compiler.version VALUE "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_VERSION}")
+    opendaq_set_metadata_field(settings compiler.toolset VALUE "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_TOOLSET}")
+    opendaq_set_metadata_field(settings compiler.libcxx  VALUE "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_LIBCXX}")
+    opendaq_set_metadata_field(settings compiler.cppstd  VALUE "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_CPPSTD}")
+    opendaq_set_metadata_field(settings compiler.runtime VALUE "${CPACK_OPENDAQ_META_SETTINGS_COMPILER_RUNTIME}")
+    opendaq_set_metadata_field(settings build_type       VALUE "${CPACK_OPENDAQ_META_SETTINGS_BUILD_TYPE}")
 
-    set(_custom "")
-    _daq_meta_member(_custom "platform" "${CPACK_OPENDAQ_META_CUSTOM_PLATFORM}")
-    _daq_meta_member(_custom "glibc"    "${CPACK_OPENDAQ_META_CUSTOM_GLIBC}")
+    opendaq_set_metadata_field(custom platform VALUE "${CPACK_OPENDAQ_META_CUSTOM_PLATFORM}")
+    opendaq_set_metadata_field(custom glibc    VALUE "${CPACK_OPENDAQ_META_CUSTOM_GLIBC}")
 
-    set(_sections "")
-    foreach(_section package settings custom)
-        if(_${_section})
-            string(JOIN ",\n" _members ${_${_section}})
-            list(APPEND _sections "  \"${_section}\": {\n${_members}\n  }")
-        endif()
-    endforeach()
-    string(JOIN ",\n" _body ${_sections})
+    _opendaq_metadata_fields_to_json(_json "" ${CPACK_OPENDAQ_META_FIELDS} ${_project_fields})
 
-    set(_json "{\n")
-    string(APPEND _json "  \"schema\": 1,\n")
-    string(APPEND _json "  \"media-type\": \"application/vnd.opendaq.staging.layer.v1.tar+gzip\",\n")
-    string(APPEND _json "${_body}\n")
-    string(APPEND _json "}\n")
-
-    file(WRITE "${ARG_OUTPUT}" "${_json}")
+    file(WRITE "${ARG_OUTPUT}" "${_json}\n")
     message(STATUS "Wrote metadata: ${ARG_OUTPUT}")
 endfunction()
