@@ -1,3 +1,6 @@
+## v1.1.2
+ - Include a fetched Boost as system headers (`opendaq_dependency(... SYSTEM)`, CMake 3.25+), as a found Boost already is: clang 20 and later flag the asio literal operators of Boost 1.82, and `-Werror` failed the consumers' build
+
 ## v1.1.1
  - Suppress the GCC `stringop-overflow` false positive (`-Wno-stringop-overflow`): GCC 13/14 on aarch64 at -O3 misreports the fixed buffer in `date::detail::read`, and the release `-Werror` failed the build
 
