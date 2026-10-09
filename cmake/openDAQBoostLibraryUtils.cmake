@@ -109,6 +109,7 @@ function(opendaq_complete_boost_dependency)
         URL_HASH            "${OPENDAQ_BOOST_DOWNLOAD_URL_HASH}"
         EXPECT_TARGET       Boost::headers
         OVERRIDE_FIND_PACKAGE
+        SYSTEM
     )
 
     if (Boost_FETCHED)

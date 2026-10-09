@@ -52,6 +52,7 @@ endmacro()
 #     [ EXPECT_COMMNAD    some_command ]      # if set, asserts that the specified command is provided
 #     [ PATCH_FILES       ... ]               # if set, specified patches are applied before building
 #     [ GIT_SHALLOW       OFF ]               # overrides the default GIT_SHALLOW mode (default is ON)
+#     [ SYSTEM ]                              # if fetched, consumers include its headers as system headers (CMake 3.25+)
 # )
 #
 # SourceOptions are:
@@ -80,7 +81,7 @@ endmacro()
 macro(opendaq_dependency)
 
     cmake_parse_arguments(OPENDAQ_DEP
-        "OPTIONAL;OVERRIDE_FIND_PACKAGE"
+        "OPTIONAL;OVERRIDE_FIND_PACKAGE;SYSTEM"
         "NAME;REQUIRED_VERSION;EXPECT_TARGET;EXPECT_COMMAND;GIT_REPOSITORY;GIT_REF;GIT_SHALLOW;URL;URL_HASH;FETCH_LOG_LEVEL;PKGCONFIG_NAME;FIND_PACKAGE_NAME;GIT_SUBMODULES;SOURCE_SUBDIR"
         "PATCH_FILES;ADD_FETCH_ALIAS"
         ${ARGN})
@@ -200,6 +201,11 @@ macro(opendaq_dependency)
 
         if (OPENDAQ_DEP_OVERRIDE_FIND_PACKAGE)
             list(APPEND FC_PARAMS OVERRIDE_FIND_PACKAGE)
+        endif()
+
+        # keeps warnings from the dependency's headers out of the consumers' -Werror, as for a found package
+        if (OPENDAQ_DEP_SYSTEM AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.25)
+            list(APPEND FC_PARAMS SYSTEM)
         endif()
 
         FetchContent_Declare(${OPENDAQ_DEP_NAME}
