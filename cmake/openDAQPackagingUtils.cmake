@@ -24,6 +24,10 @@
 ##   opendaq_set_metadata_field(dependencies opendaq revision VALUE <sha>)   from the project
 ##   -D CPACK_OPENDAQ_META_FIELDS=dependencies/opendaq/revision=<sha>        from the outside
 ##
+## Several fields from the outside are one list, its entries separated by ";":
+##
+##   -D "CPACK_OPENDAQ_META_FIELDS=dependencies/opendaq/revision=<sha>;dependencies/opcua-modules/revision=<sha>"
+##
 ## An entry with the path of a fixed field overrides it in the metadata only. The fields a
 ## package is named by -- package, arch, platform, compiler, build type -- are changed through
 ## their variables, or the file name and the metadata part ways.
