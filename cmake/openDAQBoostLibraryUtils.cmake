@@ -92,12 +92,12 @@ function(opendaq_complete_boost_dependency)
         "Boost version required for openDAQ"
     )
 
-    set(OPENDAQ_BOOST_DOWNLOAD_URL "https://github.com/boostorg/boost/releases/download/boost-1.82.0/boost-1.82.0.tar.xz"
+    set(OPENDAQ_BOOST_DOWNLOAD_URL "https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-cmake.tar.xz"
         CACHE STRING
         "Boost archive download URL"
     )
 
-    set(OPENDAQ_BOOST_DOWNLOAD_URL_HASH "SHA256=fd60da30be908eff945735ac7d4d9addc7f7725b1ff6fcdcaede5262d511d21e"
+    set(OPENDAQ_BOOST_DOWNLOAD_URL_HASH "SHA256=9bed76128d4e46755dbe818487788c6fceb6f72b378f4daa49b7e1e600d9088d"
         CACHE STRING
         "Boost archive download URL HASH"
     )
