@@ -158,4 +158,22 @@ function(opendaq_complete_boost_dependency)
             endif()
         endforeach()
     endif()
+
+    # GCC < 8 expands BOOST_CURRENT_LOCATION to __PRETTY_FUNCTION__. Used in namespace-scope default arguments
+    # it conflicts across a precompiled header boundary: "conflicting declaration 'const char __PRETTY_FUNCTION__ [10]'"
+    # (e.g. Boost >= 1.91 boost/uuid/detail/throw_invalid_uuid.hpp vs boost/throw_exception.hpp).
+    # Defined on every Boost entry target, so all translation units see the same default arguments.
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8)
+        message(STATUS "GCC ${CMAKE_CXX_COMPILER_VERSION}: defining BOOST_DISABLE_CURRENT_LOCATION")
+        foreach(BOOST_TARGET boost_assert Boost::headers daq::boost_headers)
+            if (NOT TARGET ${BOOST_TARGET})
+                continue()
+            endif()
+            get_target_property(BOOST_TARGET_ALIAS ${BOOST_TARGET} ALIASED_TARGET)
+            if (BOOST_TARGET_ALIAS)
+                set(BOOST_TARGET ${BOOST_TARGET_ALIAS})
+            endif()
+            target_compile_definitions(${BOOST_TARGET} INTERFACE BOOST_DISABLE_CURRENT_LOCATION)
+        endforeach()
+    endif()
 endfunction()
