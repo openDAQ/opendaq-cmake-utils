@@ -20,7 +20,16 @@ function(opendaq_append_required_boost_headers)
     endforeach()
 endfunction()
 
+# Optional arguments (all or none), defaults to Boost 1.82.0:
+#   VERSION   Boost version required
+#   URL       Boost archive download URL
+#   URL_HASH  Boost archive hash, e.g. SHA256=<hex>
 function(opendaq_complete_boost_dependency)
+    cmake_parse_arguments(PARSE_ARGV 0 ARG "" "VERSION;URL;URL_HASH" "")
+    if (ARG_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "opendaq_complete_boost_dependency(): unknown arguments: ${ARG_UNPARSED_ARGUMENTS}")
+    endif()
+
     # fallback to defaults if options are not defined e.g. when building with installed opendaq
     if (NOT DEFINED OPENDAQ_LINK_3RD_PARTY_LIBS_STATICALY)
         set(OPENDAQ_LINK_3RD_PARTY_LIBS_STATICALY ON)
@@ -87,26 +96,21 @@ function(opendaq_complete_boost_dependency)
         FORCE
     )
 
-    set(OPENDAQ_BOOST_REQUIRED_VERSION "1.92.0"
-        CACHE STRING
-        "Boost version required for openDAQ"
-    )
+    if (NOT DEFINED ARG_VERSION AND NOT DEFINED ARG_URL AND NOT DEFINED ARG_URL_HASH)
+        set(ARG_VERSION "1.82.0")
+        set(ARG_URL "https://github.com/boostorg/boost/releases/download/boost-1.82.0/boost-1.82.0.tar.xz")
+        set(ARG_URL_HASH "SHA256=fd60da30be908eff945735ac7d4d9addc7f7725b1ff6fcdcaede5262d511d21e")
+    elseif (NOT DEFINED ARG_VERSION OR NOT DEFINED ARG_URL OR NOT DEFINED ARG_URL_HASH)
+        message(FATAL_ERROR "opendaq_complete_boost_dependency(): VERSION, URL and URL_HASH must be given together")
+    endif()
 
-    set(OPENDAQ_BOOST_DOWNLOAD_URL "https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-cmake.tar.gz"
-        CACHE STRING
-        "Boost archive download URL"
-    )
-
-    set(OPENDAQ_BOOST_DOWNLOAD_URL_HASH "SHA256=f51707c27359a0df0cac1beada86de31bb5eed5e8285592dadec384df99c2984"
-        CACHE STRING
-        "Boost archive download URL HASH"
-    )
+    message(STATUS "Boost download URL: ${ARG_URL}")
 
     opendaq_dependency(
         NAME                Boost
-        REQUIRED_VERSION    "${OPENDAQ_BOOST_REQUIRED_VERSION}"
-        URL                 "${OPENDAQ_BOOST_DOWNLOAD_URL}"
-        URL_HASH            "${OPENDAQ_BOOST_DOWNLOAD_URL_HASH}"
+        REQUIRED_VERSION    "${ARG_VERSION}"
+        URL                 "${ARG_URL}"
+        URL_HASH            "${ARG_URL_HASH}"
         EXPECT_TARGET       Boost::headers
         OVERRIDE_FIND_PACKAGE
         SYSTEM
