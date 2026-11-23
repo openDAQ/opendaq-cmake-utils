@@ -1,3 +1,7 @@
+## v1.1.4
+ - Patch the fetched Boost 1.82: Boost.Locale's `source_group(TREE)` takes `include/boost/locale.hpp`, outside its root, an error since CMake 4.5 (boostorg/locale#273, in no Boost release yet)
+ - `opendaq_dependency(... PATCH_FILES)` patches a dependency fetched as an archive inside another repository: `git apply` took that repository, skipped every path and succeeded (`GIT_CEILING_DIRECTORIES`)
+
 ## v1.1.3
  - Add `opendaq_set_metadata_field`: a project writes fields of its own to the staging metadata, nested at any depth
  - Add `CPACK_OPENDAQ_META_FIELDS`, the list of those fields as `<key>/<key>=<value>` entries: it can be given from the outside, and an entry with the path of a fixed field overrides it

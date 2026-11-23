@@ -1,3 +1,6 @@
+# the patches applied to the fetched Boost, next to this file
+set(opendaq_boost_patches_dir ${CMAKE_CURRENT_LIST_DIR}/patches/boost CACHE INTERNAL "")
+
 function(opendaq_append_required_boost_components)
     if(NOT ARGN)
         message(FATAL_ERROR "opendaq_append_required_boost_components() called with no input list")
@@ -110,6 +113,9 @@ function(opendaq_complete_boost_dependency)
         EXPECT_TARGET       Boost::headers
         OVERRIDE_FIND_PACKAGE
         SYSTEM
+        # Boost.Locale's source_group(TREE) takes include/boost/locale.hpp, outside its root: an error since
+        # CMake 4.5; boostorg/locale#273, in no Boost release yet
+        PATCH_FILES         ${opendaq_boost_patches_dir}/001-locale-source-group-tree.patch
     )
 
     if (Boost_FETCHED)
