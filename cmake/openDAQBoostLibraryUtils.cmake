@@ -1,4 +1,4 @@
-# the patches applied to the fetched Boost, next to this file
+# the patches applied to the fetched Boost, a directory per Boost version, next to this file
 set(opendaq_boost_patches_dir ${CMAKE_CURRENT_LIST_DIR}/patches/boost CACHE INTERNAL "")
 
 function(opendaq_append_required_boost_components)
@@ -105,6 +105,15 @@ function(opendaq_complete_boost_dependency)
         "Boost archive download URL HASH"
     )
 
+    # the patches made for the Boost version fetched, none for another version: e.g. Boost.Locale's
+    # source_group(TREE) fails since CMake 4.5, fixed by boostorg/locale#273, in no Boost release yet
+    option(OPENDAQ_BOOST_PATCH "Apply the patches made for the fetched Boost version" ON)
+    set(OPENDAQ_BOOST_PATCH_FILES)
+    if (OPENDAQ_BOOST_PATCH)
+        file(GLOB OPENDAQ_BOOST_PATCH_FILES "${opendaq_boost_patches_dir}/${OPENDAQ_BOOST_REQUIRED_VERSION}/*.patch")
+        list(SORT OPENDAQ_BOOST_PATCH_FILES)
+    endif()
+
     opendaq_dependency(
         NAME                Boost
         REQUIRED_VERSION    "${OPENDAQ_BOOST_REQUIRED_VERSION}"
@@ -113,9 +122,7 @@ function(opendaq_complete_boost_dependency)
         EXPECT_TARGET       Boost::headers
         OVERRIDE_FIND_PACKAGE
         SYSTEM
-        # Boost.Locale's source_group(TREE) takes include/boost/locale.hpp, outside its root: an error since
-        # CMake 4.5; boostorg/locale#273, in no Boost release yet
-        PATCH_FILES         ${opendaq_boost_patches_dir}/001-locale-source-group-tree.patch
+        PATCH_FILES         ${OPENDAQ_BOOST_PATCH_FILES}
     )
 
     if (Boost_FETCHED)

@@ -1,5 +1,6 @@
 ## v1.1.4
  - Patch the fetched Boost 1.82: Boost.Locale's `source_group(TREE)` takes `include/boost/locale.hpp`, outside its root, an error since CMake 4.5 (boostorg/locale#273, in no Boost release yet)
+ - Apply to a fetched Boost the patches in `cmake/patches/boost/<OPENDAQ_BOOST_REQUIRED_VERSION>/`, none for another version; `OPENDAQ_BOOST_PATCH=OFF` applies none
  - `opendaq_dependency(... PATCH_FILES)` patches a dependency fetched as an archive inside another repository: `git apply` took that repository, skipped every path and succeeded (`GIT_CEILING_DIRECTORIES`)
 
 ## v1.1.3
