@@ -1,6 +1,11 @@
 # Workaround script mode inability to pass-in lists
 string(REPLACE "|" ";" PATCH_FILES ${PATCHES})
 
+# A dependency fetched as an archive is no repository of its own: git must not take the one around it (git apply
+# would skip every path, as outside it, and succeed; git reset and clean below would act on it)
+get_filename_component(_patch_parent_dir "${CMAKE_SOURCE_DIR}" DIRECTORY)
+set(ENV{GIT_CEILING_DIRECTORIES} "${_patch_parent_dir}")
+
 set(DO_PATCH OFF)
 set(PATCH_FILE ${CMAKE_SOURCE_DIR}/.patched)
 
